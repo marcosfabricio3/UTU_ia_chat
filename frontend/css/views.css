@@ -222,7 +222,11 @@
   flex: none;
   color: var(--salmon-ink);
 }
-.theme-switch:focus-within { outline: 2px solid var(--salmon-ink); outline-offset: 2px; }
+/* Anillo de foco SÓLO con teclado. El botón real vive en el shadow DOM del
+   componente, así que `:focus-visible` no se puede consultar desde acá; usamos
+   la clase `kb` (modalidad de entrada, ver a11y.js) para no dibujar el anillo
+   al hacer clic. Con teclado se suma al anillo que ya dibuja el navegador. */
+html.kb .theme-switch:focus-within { outline: 2px solid var(--salmon-ink); outline-offset: 2px; }
 @media (max-width: 720px) { .theme-switch { margin-left: auto; } }
 
 /* ---------------- Paneles / estructura ---------------- */
@@ -338,16 +342,21 @@
 }
 .link-btn:hover { text-decoration-color: var(--salmon); }
 
-/* Botón "Autocompletar": ícono Lucide + texto. Al hover/focus el ícono se pinta
-   salmón (--salmon-solid, el mismo del basurero) y hace cross-fade de "sparkle"
-   (una estrella) a "sparkles" (varias). Los dos SVG van apilados y se alternan. */
-.link-btn.autofill-btn { display: inline-flex; align-items: center; gap: 6px; }
+/* Botón "Autocompletar": texto + ícono Lucide a la derecha. Al hover/focus se
+   tiñe TODO el botón con el ACENTO (--salmon: salmón en claro, blanco en oscuro)
+   —en oscuro la tinta base ya es salmón, por eso el acento es lo que se nota— y
+   el ícono hace cross-fade de "sparkle" (una estrella) a "sparkles" (varias). */
+.link-btn.autofill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: color .18s ease;
+}
 .autofill-btn .af-ico {
   position: relative;
   flex: none;
   width: 16px;
   height: 16px;
-  transition: color .18s ease;
 }
 .autofill-btn .af-ico .icon {
   position: absolute;
@@ -355,8 +364,8 @@
   transition: opacity .18s ease, transform .18s ease;
 }
 .autofill-btn .af-ico .icon-sparkles { opacity: 0; transform: scale(.7) rotate(-15deg); }
-.autofill-btn:hover .af-ico,
-.autofill-btn:focus-visible .af-ico { color: var(--salmon-solid); }
+.autofill-btn:hover,
+.autofill-btn:focus-visible { color: var(--salmon); text-decoration-color: var(--salmon); }
 .autofill-btn:hover .af-ico .icon-sparkle,
 .autofill-btn:focus-visible .af-ico .icon-sparkle { opacity: 0; transform: scale(.8) rotate(15deg); }
 .autofill-btn:hover .af-ico .icon-sparkles,

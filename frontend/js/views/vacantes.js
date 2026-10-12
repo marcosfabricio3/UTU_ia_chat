@@ -62,8 +62,8 @@ CV.views = CV.views || {};
         <div class="btn-row">
           <button class="btn" type="submit">Crear vacante</button>
           <button class="link-btn autofill-btn" type="button" id="suggest-btn">
-            <span class="af-ico" aria-hidden="true">${icon("sparkle")}${icon("sparkles")}</span>
             <span>Autocompletar</span>
+            <span class="af-ico" aria-hidden="true">${icon("sparkle")}${icon("sparkles")}</span>
           </button>
         </div>
         <p class="status" id="st-form" hidden></p>

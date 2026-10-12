@@ -216,12 +216,14 @@ $env:GEMINI_MODEL="gemini-3.5-flash"; node src/app.js
 - **Prompt.** `backend/src/prompts/suggest.prompt.js` (`SUGGEST_SYSTEM_INSTRUCTION` +
   `SUGGEST_SCHEMA`), mismo patrón de **salida estructurada (JSON)** que el de scoring.
 - **Frontend.** En `views/vacantes.js`: se borró `SAMPLE` y el listener de `#load-sample`; el botón
-  `#suggest-btn` lleva el ícono Lucide (**`sparkle` → `sparkles`** al hover/focus, en salmón) +
-  el texto. `suggest()` valida el título, muestra el estado en `#st-form`, **solo completa campos
-  vacíos** y, si iba a pisar texto existente, **pide confirmación** (`CV.ui.confirm`). Los íconos
-  se agregaron al set curado (`a11y.js`) y el cross-fade/color vive en `css/views.css`
-  (respeta `prefers-reduced-motion`). Los requisitos se normalizan a **viñetas** (`asBullets`:
-  una por línea, con `• ` al frente).
+  `#suggest-btn` es **texto + ícono Lucide a la derecha**. Al hover/focus se tiñe TODO el botón
+  (palabra **e** ícono) con el **acento** (`--salmon`: salmón en claro, blanco en oscuro) y el ícono
+  hace cross-fade `sparkle` → `sparkles`. (Teñir sólo el ícono no se notaba en oscuro, donde la
+  tinta base ya es salmón.) `suggest()` valida el título, muestra el estado en `#st-form`, **solo
+  completa campos vacíos** y, si iba a pisar texto existente, **pide confirmación**
+  (`CV.ui.confirm`). Los íconos se agregaron al set curado (`a11y.js`) y la animación vive en
+  `css/views.css` (respeta `prefers-reduced-motion`). Los requisitos se normalizan a **viñetas**
+  (`asBullets`: una por línea, con `• ` al frente).
 - **Costo.** 1 petición a la IA por click; reusa el reintento ante 503/429 y el rate-limit (30/min).
 - **Verificado.**
   - **Stub, sin cuota** (`%TEMP%\opencode\test-suggest.js`, stubbea `gemini.service`): sin título →
@@ -230,11 +232,26 @@ $env:GEMINI_MODEL="gemini-3.5-flash"; node src/app.js
   - **Ruta en vivo:** título vacío → `400` "Indicá un título.".
   - **E2E real (1 llamada):** "Desarrollador Frontend React" → `200` con requisitos y descripción
     coherentes (~93 s).
-  - **Navegador (API stubbeada):** el botón renderiza los 2 SVG; hover → salmón `rgb(255,122,107)`
+  - **Navegador (API stubbeada):** el botón renderiza **texto + 2 SVG a la derecha**; hover → el
+    ACENTO tiñe texto e ícono (claro: salmón `rgb(255,122,107)`; oscuro: blanco `rgb(255,255,255)`)
     con `sparkle`(0)/`sparkles`(1) y sin hover al revés; rellena vacíos; con texto pide confirmación
     "Reemplazar la descripción" (aceptar reemplaza; cancelar deja intacto y avisa "No se cambió
     nada."); sin título → error de campo y **no** llama a la IA; si la IA falla → estado de error y
     campos intactos; requisitos en viñetas. Consola limpia. **Ok.**
+
+### 2.8 Anillo de foco del selector de tema (shadow DOM)
+- **Síntoma.** Al hacer click en el `<theme-switch>` de la navbar aparecía un **borde negro** (2px)
+  que quedaba hasta sacar el foco.
+- **Causa.** La regla `.theme-switch:focus-within` dibujaba el anillo también con el **mouse**: el
+  botón real vive dentro del **shadow DOM** del componente, así que un click lo enfoca y
+  `:focus-within` matchea (aunque el foco no sea "visible").
+- **Arreglo.** `:focus-visible` **no** se puede consultar desde afuera del shadow root ni con
+  `:has()`. Se registra la **modalidad de entrada** en `html.kb` (`a11y.js`: `keydown` la activa,
+  `pointerdown` la quita) y la regla pasa a `html.kb .theme-switch:focus-within`. Con teclado el
+  anillo vuelve a verse (además del que ya dibuja el navegador); con mouse, no.
+- **Verificado (navegador, computed styles).** Click → `focus-within: true` pero `outline: none`.
+  `keydown` + foco visible → `html.kb` + `outline: 2px solid rgb(11,11,11)`. `pointerdown` → sin
+  anillo. **Ok.**
 
 ---
 
