@@ -867,6 +867,19 @@ html.kb .theme-switch:focus-within { outline: 2px solid var(--salmon-ink); outli
 .chat-form input::placeholder { color: var(--ink-3); }
 .chat-form input:focus-visible { outline-offset: 2px; }
 
+/* Botón de enviar: ícono Lucide "send-horizontal" en lugar del texto "Enviar".
+   Conserva la forma alargada del botón de texto (ancho mínimo ≈ ancho de
+   "ENVIAR" y alto que acompaña al input), así no queda cuadrado. */
+.chat-send {
+  flex: none;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 5.8rem;
+  padding: 10px 18px;
+}
+
 .typing { display: inline-flex; gap: 6px; align-items: center; color: var(--ink-3); font-size: .85rem; font-family: var(--font-mono); }
 
 /* ---------------- Movimiento (entrada del ranking) ---------------- */
