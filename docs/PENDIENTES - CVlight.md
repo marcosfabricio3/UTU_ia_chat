@@ -261,7 +261,7 @@ $env:GEMINI_MODEL="gemini-3.5-flash"; node src/app.js
   `min-width: 5.8rem` (≈ el ancho del botón de texto) + `align-self: stretch` (el alto sigue al del
   input) y centra el ícono con `inline-flex`.
 - **Verificado (navegador).** Botón 93×54 px (relación ~1.7:1, rectangular), 1 SVG `icon-send-horizontal`
-  de 18 px, `aria-label="Enviar"`, alto igual al input y consola limpia. **Ok.**
+  de 20 px, `aria-label="Enviar"`, alto igual al input y consola limpia. **Ok.**
 
 ---
 
