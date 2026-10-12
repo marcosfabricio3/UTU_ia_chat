@@ -223,6 +223,17 @@ window.CV = window.CV || {};
     },
   };
 
+  /* ---------------- Modalidad de entrada ----------------
+     Registra si la última interacción fue con teclado (`html.kb`) o puntero, para
+     no dibujar anillos de foco al hacer clic. Hace falta porque los componentes
+     con shadow DOM (p. ej. <theme-switch>) no exponen `:focus-visible` hacia
+     afuera. Ver la regla `html.kb .theme-switch:focus-within` en views.css. */
+  (function trackInputModality() {
+    const root = document.documentElement;
+    window.addEventListener("keydown", () => root.classList.add("kb"), true);
+    window.addEventListener("pointerdown", () => root.classList.remove("kb"), true);
+  })();
+
   CV.util = util;
   CV.a11y = a11y;
 })(window.CV);
