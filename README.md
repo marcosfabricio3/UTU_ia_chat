@@ -64,7 +64,7 @@ también se puede abrir con `file://` porque el backend tiene CORS abierto.)
 | `POST` | `/api/jobs/:id/cvs` | Subir CVs (multipart, campo `cvs`, solo PDF) |
 | `DELETE` | `/api/jobs/:id/cvs/:cvId` | Eliminar un CV (registro + PDF) |
 | `GET` | `/api/jobs/:id/cvs/:cvId/file` | Ver el PDF de un CV (inline) |
-| `POST` | `/api/jobs/:id/analyze` | Puntuar todos los CVs de la vacante |
+| `POST` | `/api/jobs/:id/analyze` | Puntuar los CVs **pendientes** (los ya analizados se saltan; `{ force: true }` re-analiza todo) |
 | `GET` | `/api/jobs/:id/ranking` | Ranking ordenado + KPIs |
 | `POST` | `/api/jobs/:id/chat` | Chat RAG sobre los CVs de la vacante |
 | `POST` | `/api/chat` | Chat suelto (plantilla original, sin RAG) |
