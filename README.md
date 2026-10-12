@@ -58,6 +58,7 @@ también se puede abrir con `file://` porque el backend tiene CORS abierto.)
 | Método | Ruta | Función |
 |---|---|---|
 | `POST` | `/api/jobs` | Crear una vacante |
+| `POST` | `/api/jobs/suggest` | **Autocompletar** una vacante con IA (requisitos + descripción) desde el título |
 | `GET` | `/api/jobs` | Listar vacantes |
 | `GET` | `/api/jobs/:id` | Ver una vacante |
 | `DELETE` | `/api/jobs/:id` | Eliminar la vacante y los PDFs de sus CVs |
@@ -70,8 +71,8 @@ también se puede abrir con `file://` porque el backend tiene CORS abierto.)
 | `POST` | `/api/chat` | Chat suelto (plantilla original, sin RAG) |
 | `GET` | `/api/chat/models` | Diagnóstico: lista los modelos en consola |
 
-`POST /api/jobs/:id/analyze` y `POST /api/jobs/:id/chat` están limitados a
-**30 peticiones por minuto por IP** para no agotar la cuota de la IA.
+`POST /api/jobs/suggest`, `POST /api/jobs/:id/analyze` y `POST /api/jobs/:id/chat`
+están limitados a **30 peticiones por minuto por IP** para no agotar la cuota de la IA.
 
 ## Estructura
 
@@ -118,7 +119,8 @@ docs/                       # documentación del proyecto
 
 ## Verificación rápida
 
-1. Crear una vacante (o usar **Cargar ejemplo**).
-- 2. Desplegarla, subir los PDFs de `sample-cvs/` y pulsar **Analizar CVs**.
-- 3. Ver el **Ranking** y abrir el PDF de un candidato con el ícono junto al nombre.
-- 4. En **Chat**, preguntar p. ej. *"¿Quién tiene más experiencia con React?"*.
+1. Crear una vacante. Con sólo el **título**, el botón **Autocompletar** (IA) redacta los
+   requisitos y la descripción.
+2. Desplegarla, subir los PDFs de `sample-cvs/` y pulsar **Analizar CVs**.
+3. Ver el **Ranking** y abrir el PDF de un candidato con el ícono junto al nombre.
+4. En **Chat**, preguntar p. ej. *"¿Quién tiene más experiencia con React?"*.

@@ -17,6 +17,7 @@ CV.views = CV.views || {};
   const analyzing = new Set(); // ids con un análisis en curso (evita doble envío)
   const deleting = new Set();  // ids con un borrado en curso (evita doble envío)
   const shredding = new Set(); // ids de CV con un borrado en curso (evita doble envío)
+  let suggesting = false;      // hay un "Autocompletar" en curso (evita doble envío)
 
   // Filtra un FileList dejando solo PDF (por MIME o por extensión).
   function pdfOnly(fileList) {
@@ -25,12 +26,16 @@ CV.views = CV.views || {};
     );
   }
 
-  const SAMPLE = {
-    titulo: "Desarrollador Frontend",
-    requisitos: "3+ años de experiencia en React, manejo de Git, inglés técnico.",
-    descripcion:
-      "Buscamos una persona para el equipo de frontend, con experiencia en React, TypeScript y trabajo en equipo.",
-  };
+  // Normaliza los requisitos a viñetas: una por línea con "• " al frente (no la
+  // duplica si la IA ya devolvió alguna línea con viñeta).
+  function asBullets(text) {
+    return String(text || "")
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((l) => (/^[•\-*]\s/.test(l) ? l : "• " + l))
+      .join("\n");
+  }
 
   /* ---------------- Montaje (estructura fija) ---------------- */
   function mount(panel) {
@@ -56,7 +61,10 @@ CV.views = CV.views || {};
         </div>
         <div class="btn-row">
           <button class="btn" type="submit">Crear vacante</button>
-          <button class="link-btn" type="button" id="load-sample">Cargar ejemplo</button>
+          <button class="link-btn autofill-btn" type="button" id="suggest-btn">
+            <span class="af-ico" aria-hidden="true">${icon("sparkle")}${icon("sparkles")}</span>
+            <span>Autocompletar</span>
+          </button>
         </div>
         <p class="status" id="st-form" hidden></p>
       </form>`;
@@ -72,12 +80,7 @@ CV.views = CV.views || {};
       </section>`;
 
     formEl.querySelector("#form-vacante").addEventListener("submit", onSubmit);
-    formEl.querySelector("#load-sample").addEventListener("click", () => {
-      formEl.querySelector("#f-titulo").value = SAMPLE.titulo;
-      formEl.querySelector("#f-req").value = SAMPLE.requisitos;
-      formEl.querySelector("#f-desc").value = SAMPLE.descripcion;
-      formEl.querySelector("#f-titulo").focus();
-    });
+    formEl.querySelector("#suggest-btn").addEventListener("click", suggest);
 
     const list = panelEl.querySelector("#job-list");
     list.addEventListener("click", onListClick);
@@ -218,6 +221,70 @@ CV.views = CV.views || {};
       CV.app.toast("Vacante creada: " + titulo);
     } catch (err) {
       setStatus(st, "error", err.message);
+    }
+  }
+
+  /* ---------------- Autocompletar con IA ---------------- */
+  // Arma un borrador de la vacante con la IA a partir del título (y los
+  // requisitos, si ya están escritos). Solo RELLENA el formulario: nunca crea la
+  // vacante ni guarda nada. Si iba a pisar texto que ya existe, pide confirmación.
+  async function suggest() {
+    if (suggesting) return; // evita doble envío
+
+    const tituloEl = formEl.querySelector("#f-titulo");
+    const reqEl = formEl.querySelector("#f-req");
+    const descEl = formEl.querySelector("#f-desc");
+    const st = formEl.querySelector("#st-form");
+    const btn = formEl.querySelector("#suggest-btn");
+
+    const titulo = tituloEl.value.trim();
+    if (!titulo) {
+      setFieldError(tituloEl, "#e-titulo", "Indicá un título para que la IA sepa qué generar.");
+      tituloEl.focus();
+      return;
+    }
+    setFieldError(tituloEl, "#e-titulo", "");
+
+    // Si ya escribió requisitos, los respetamos: solo pedimos la descripción.
+    const requisitos = reqEl.value.trim();
+
+    // Aplica un valor generado. Si el campo ya tiene texto distinto, confirma.
+    async function apply(input, valor, etiqueta) {
+      if (!valor) return false;
+      if (input.value.trim() && input.value.trim() !== valor.trim()) {
+        const ok = await CV.ui.confirm({
+          title: "Reemplazar " + etiqueta,
+          message: "Ya escribiste " + etiqueta + ". ¿Reemplazar por la sugerencia de la IA?",
+          confirmLabel: "Reemplazar",
+        });
+        if (!ok) return false;
+      }
+      input.value = valor;
+      return true;
+    }
+
+    suggesting = true;
+    btn.disabled = true;
+    setStatus(st, "loading", "Generando el borrador con la IA…");
+
+    try {
+      const data = await api.suggestJob({ titulo, requisitos });
+      const hechoReq = requisitos
+        ? false // lo que el usuario ya escribió no se toca
+        : await apply(reqEl, asBullets(data.requisitos), "los requisitos");
+      const hechoDesc = await apply(descEl, data.descripcion, "la descripción");
+
+      if (!hechoReq && !hechoDesc) {
+        setStatus(st, "ok", "No se cambió nada.");
+        return;
+      }
+      (hechoDesc ? descEl : reqEl).focus();
+      setStatus(st, "ok", "Borrador listo. Revisalo y creá la vacante.");
+    } catch (err) {
+      setStatus(st, "error", err.message);
+    } finally {
+      suggesting = false;
+      btn.disabled = false;
     }
   }
 

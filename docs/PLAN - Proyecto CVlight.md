@@ -101,6 +101,7 @@ frontend/
 | Método | Ruta | Función |
 |---|---|---|
 | POST | `/api/jobs` | Crear vacante |
+| POST | `/api/jobs/suggest` | Autocompletar la vacante con IA (requisitos + descripción) desde el título |
 | GET | `/api/jobs` | Listar vacantes |
 | GET | `/api/jobs/:id` | Ver una vacante |
 | DELETE | `/api/jobs/:id` | Eliminar vacante (+ PDFs de sus CVs) |

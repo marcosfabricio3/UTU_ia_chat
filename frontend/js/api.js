@@ -57,6 +57,13 @@ window.CV = window.CV || {};
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ force: !!force }),
       }),
+    // "Autocompletar": la IA redacta requisitos/descripción a partir del título.
+    suggestJob: (payload) =>
+      request("/jobs/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
     deleteJob: (id) => request("/jobs/" + encodeURIComponent(id), { method: "DELETE" }),
     deleteCv: (jobId, cvId) =>
       request(

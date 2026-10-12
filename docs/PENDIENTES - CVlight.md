@@ -205,6 +205,37 @@ $env:GEMINI_MODEL="gemini-3.5-flash"; node src/app.js
   vacante con matias analizado + camila pendiente → "Analizar" procesó **solo camila**
   (`analyzedNow: 1, skipped: 1`) y quedó el ranking con ambos (95 y 25).
 
+### 2.7 Botón "Autocompletar" con IA (reemplaza "Cargar ejemplo")
+- **Qué cambia.** El botón "Cargar ejemplo" (artefacto de desarrollo: rellenaba el formulario con
+  una constante `SAMPLE`) se reemplazó por **"Autocompletar"**, que usa la IA para **redactar** la
+  vacante a partir del título.
+- **Backend.** `POST /api/jobs/suggest` (en `jobs.routes.js`, con `aiLimit`): recibe
+  `{ titulo, requisitos? }`. Sin título → `400`. **Sin requisitos** genera **requisitos +
+  descripción**; **con requisitos** los respeta y solo redacta la descripción. Responde
+  `{ success, requisitos, descripcion }`. Es **puro texto**: no crea ni guarda nada.
+- **Prompt.** `backend/src/prompts/suggest.prompt.js` (`SUGGEST_SYSTEM_INSTRUCTION` +
+  `SUGGEST_SCHEMA`), mismo patrón de **salida estructurada (JSON)** que el de scoring.
+- **Frontend.** En `views/vacantes.js`: se borró `SAMPLE` y el listener de `#load-sample`; el botón
+  `#suggest-btn` lleva el ícono Lucide (**`sparkle` → `sparkles`** al hover/focus, en salmón) +
+  el texto. `suggest()` valida el título, muestra el estado en `#st-form`, **solo completa campos
+  vacíos** y, si iba a pisar texto existente, **pide confirmación** (`CV.ui.confirm`). Los íconos
+  se agregaron al set curado (`a11y.js`) y el cross-fade/color vive en `css/views.css`
+  (respeta `prefers-reduced-motion`). Los requisitos se normalizan a **viñetas** (`asBullets`:
+  una por línea, con `• ` al frente).
+- **Costo.** 1 petición a la IA por click; reusa el reintento ante 503/429 y el rate-limit (30/min).
+- **Verificado.**
+  - **Stub, sin cuota** (`%TEMP%\opencode\test-suggest.js`, stubbea `gemini.service`): sin título →
+    `400`; solo título → `200` con requisitos + descripción; con requisitos → el prompt los incluye;
+    se pasan `systemInstruction` y `responseSchema`.
+  - **Ruta en vivo:** título vacío → `400` "Indicá un título.".
+  - **E2E real (1 llamada):** "Desarrollador Frontend React" → `200` con requisitos y descripción
+    coherentes (~93 s).
+  - **Navegador (API stubbeada):** el botón renderiza los 2 SVG; hover → salmón `rgb(255,122,107)`
+    con `sparkle`(0)/`sparkles`(1) y sin hover al revés; rellena vacíos; con texto pide confirmación
+    "Reemplazar la descripción" (aceptar reemplaza; cancelar deja intacto y avisa "No se cambió
+    nada."); sin título → error de campo y **no** llama a la IA; si la IA falla → estado de error y
+    campos intactos; requisitos en viñetas. Consola limpia. **Ok.**
+
 ---
 
 ## 3. Ya verificado (para contraste — NO volver a gastar cuota en esto)
