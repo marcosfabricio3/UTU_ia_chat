@@ -1,87 +1,109 @@
-
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="light">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat IA</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#FF7A6B">
+  <meta name="description" content="CVlight — análisis y ranking de CVs con IA para Talento Humano S.A. Subí los CV en PDF, obtené un ranking justificable por puntaje y consultá cada informe por chat.">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
+  <title>CVlight — Talento Humano S.A.</title>
 
-    <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="assets/fonts/fonts.css">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/background.css">
+  <link rel="stylesheet" href="css/blocks.css">
+  <link rel="stylesheet" href="css/views.css">
+
+  <!-- Tema: la primera vez arranca en "auto" (sigue el tema del sistema) y migra
+       la clave vieja. Debe correr ANTES de la librería, que lee localStorage al
+       evaluarse; así el tema se aplica antes del primer pintado (sin flash). -->
+  <script>
+    (function () {
+      if (localStorage.getItem("theme") !== null) return;
+      var prev = localStorage.getItem("cvlight.theme");
+      localStorage.setItem("theme", prev === "dark" || prev === "light" ? prev : "auto");
+    })();
+  </script>
+  <script src="assets/vendor/theme-switch.min.js"></script>
 </head>
-
 <body>
-    <div class="app">
+  <!-- Fondo: papel plano + malla de puntos negros + grano (sin grilla, sin roseta). -->
+  <div class="bg" aria-hidden="true">
+    <div class="bg__dots"></div>
+    <div class="bg__grain"></div>
+  </div>
 
-        <aside class="sidebar">
-            <h2>✦ Chat IA</h2>
+  <a class="skip-link" href="#view">Saltar al contenido</a>
 
-            <button id="new-chat" class="new-chat">
-                + Nuevo chat
-            </button>
+  <header class="masthead block block--frost">
+    <div class="masthead-inner">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+          <rect x="4" y="4" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"/>
+          <rect x="11" y="11" width="18" height="18" fill="currentColor"/>
+        </svg>
+        <img class="wordmark" src="assets/wordmark.svg" alt="CVlight" width="3981" height="1000">
+        <span class="brand-sub">Talento Humano S.A.</span>
+      </div>
 
-            <p class="sidebar-label">Tus conversaciones</p>
+      <nav class="tabs block block--thin" role="tablist" aria-label="Vistas">
+        <button class="tab" role="tab" id="tab-vacantes" aria-controls="panel-vacantes" aria-selected="true" tabindex="0">Vacantes</button>
+        <button class="tab" role="tab" id="tab-ranking" aria-controls="panel-ranking" aria-selected="false" tabindex="-1">Ranking</button>
+        <button class="tab" role="tab" id="tab-chat" aria-controls="panel-chat" aria-selected="false" tabindex="-1">Chat</button>
+      </nav>
 
-            <div id="chat-history"></div>
-
-            <div class="sidebar-footer">
-                Proyecto de aprendizaje
-            </div>
-        </aside>
-
-        <main class="chat">
-
-            <header class="chat-header">
-                <div class="avatar">✦</div>
-
-                <div>
-                    <h1>Asistente IA</h1>
-                    <span class="status">Tu asistente personal</span>
-                </div>
-            </header>
-
-            <section
-                id="messages"
-                class="messages"
-                aria-live="polite"
-                aria-label="Conversación"
-            >
-                <div class="welcome">
-                    <div class="welcome-icon">✦</div>
-
-                    <h2>¿En qué puedo ayudarte?</h2>
-
-                    <p>
-                        Escribí tu pregunta y comencemos
-                        una conversación.
-                    </p>
-                </div>
-            </section>
-
-            <form id="chat-form" class="chat-form">
-                <label class="sr-only" for="message-input">
-                    Escribí tu mensaje
-                </label>
-
-                <input
-                    type="text"
-                    id="message-input"
-                    placeholder="Escribí un mensaje..."
-                    autocomplete="off"
-                    required
-                >
-
-                <button type="submit" id="send-button">
-                    Enviar
-                </button>
-            </form>
-
-            <p class="disclaimer">
-                La IA puede cometer errores. Verificá la información.
-            </p>
-
-        </main>
+      <theme-switch class="theme-switch"></theme-switch>
     </div>
+  </header>
 
-    <script src="js/app.js"></script>
+  <!-- Columna izquierda persistente (fusionada con la navbar), presente en las 3 vistas -->
+  <aside class="sidebar block block--frost" id="sidebar" aria-labelledby="h-nueva"></aside>
+
+  <div class="content">
+    <div class="app">
+      <main id="view" class="view" tabindex="-1">
+        <section class="tabpanel" role="tabpanel" id="panel-vacantes" aria-labelledby="tab-vacantes" tabindex="0"></section>
+        <section class="tabpanel" role="tabpanel" id="panel-ranking" aria-labelledby="tab-ranking" tabindex="0" hidden></section>
+        <section class="tabpanel" role="tabpanel" id="panel-chat" aria-labelledby="tab-chat" tabindex="0" hidden></section>
+      </main>
+    </div>
+  </div>
+
+  <!-- Footer: el negativo de la navbar (banda de tinta en claro, salmón en oscuro). -->
+  <footer class="foot">
+    <div class="foot-inner">
+      <p class="foot-brand">
+        <span class="foot-word">CVlight</span>
+        <span class="foot-sub">Talento Humano S.A.</span>
+      </p>
+
+      <nav class="foot-nav" aria-label="Atajos (footer)">
+        <a href="#vacantes">Vacantes</a>
+        <a href="#ranking">Ranking</a>
+        <a href="#chat">Chat</a>
+      </nav>
+
+      <p class="foot-meta">
+        <span>Parcial 2 · IA</span>
+        <span>Vanilla JS · RAG + Gemini</span>
+      </p>
+
+      <p class="foot-note">Empresa ficticia de demostración · los resultados se revisan con criterio humano.</p>
+    </div>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/api.js"></script>
+  <script src="js/a11y.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/views/vacantes.js"></script>
+  <script src="js/views/ranking.js"></script>
+  <script src="js/views/chat.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>

@@ -1,0 +1,38 @@
+/* =========================================================================
+   CVlight — background.css · dirección "BRUTALISMO"
+   Fondo PLANO + MALLA DE PUNTOS.
+   Se eliminan la grilla/cuadriculado, la roseta guilloché, el "wash" y la
+   viñeta de la etapa anterior. En su lugar: una malla de puntos negros que
+   da textura y contraste con el papel, sin competir con el texto (los
+   bloques son opacos, así que los puntos sólo viven en los márgenes).
+   ========================================================================= */
+
+.bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.bg > * { position: absolute; }
+
+/* Malla de puntos: retícula de puntos negros (papel milimetrado / trama de
+   afiche serigráfico). Usa --line, así que en modo oscuro los puntos rotan
+   solos a SALMÓN (el trazo del tema oscuro). */
+.bg__dots {
+  inset: 0;
+  background-image: radial-gradient(circle, var(--line) 1.65px, transparent 1.66px);
+  background-size: 20px 20px;
+  background-position: -1px -1px;
+  opacity: .38;
+}
+html[data-theme="dark"] .bg__dots { opacity: .40; }
+
+/* Grano de papel: ruido fractal muy tenue (textura, no trama). */
+.bg__grain {
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 140px 140px;
+  opacity: .04;
+}
+html[data-theme="dark"] .bg__grain { opacity: .06; }

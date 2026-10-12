@@ -1,0 +1,54 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1003 >>
+stream
+BT /F2 18 Tf 50 760 Td (Carla Díaz) Tj ET
+BT /F2 12 Tf 50 736 Td (Desarrolladora Frontend Junior) Tj ET
+BT /F1 10 Tf 50 718 Td (carla.diaz@example.com | Maldonado, Uruguay) Tj ET
+BT /F1 6 Tf 50 702 Td () Tj ET
+BT /F2 12 Tf 50 690 Td (Perfil) Tj ET
+BT /F1 11 Tf 50 672 Td (Desarrolladora frontend junior con 1 año de experiencia. Conocimientos básicos de React.) Tj ET
+BT /F1 6 Tf 50 655 Td () Tj ET
+BT /F2 12 Tf 50 643 Td (Experiencia) Tj ET
+BT /F1 11 Tf 50 625 Td (- Agencia Digital 2024 - 2025: maquetado de sitios con HTML y CSS y componentes básicos) Tj ET
+BT /F1 11 Tf 50 608 Td (en React.) Tj ET
+BT /F1 6 Tf 50 591 Td () Tj ET
+BT /F2 12 Tf 50 579 Td (Habilidades) Tj ET
+BT /F1 11 Tf 50 561 Td (React básico, HTML y CSS. Sin experiencia en Git.) Tj ET
+BT /F1 6 Tf 50 544 Td () Tj ET
+BT /F2 12 Tf 50 532 Td (Idiomas) Tj ET
+BT /F1 11 Tf 50 514 Td (Inglés básico A2.) Tj ET
+BT /F1 6 Tf 50 497 Td () Tj ET
+BT /F2 12 Tf 50 485 Td (Formación) Tj ET
+BT /F1 11 Tf 50 467 Td (Curso de Desarrollo Web.) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000001306 00000 n 
+0000001403 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+1505
+%%EOF

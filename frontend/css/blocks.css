@@ -1,0 +1,53 @@
+/* =========================================================================
+   CVlight — blocks.css · dirección "BRUTALISMO"
+   Primitivas de BLOQUE (reemplazan al antiguo cristal): borde grueso +
+   relleno plano + sombra dura con blur 0. Sin backdrop-filter, sin glow.
+   (Se renombró glass.css → blocks.css: la interfaz ya no es glassmorphism.)
+   ========================================================================= */
+
+/* ---------- Bloque base: tarjeta/panel ---------- */
+.block {
+  position: relative;
+  background: var(--card);
+  border: var(--line-w) solid var(--line);
+  border-radius: 0;
+  box-shadow: var(--hard);
+}
+.block > * { position: relative; z-index: 1; }
+
+/* Variante más liviana (grupos flotantes: tabs, toolbars) */
+.block--thin {
+  box-shadow: var(--hard-sm);
+}
+
+/* Piezas estructurales (navbar, columna): bloque más fuerte */
+.block--frost {
+  border-width: var(--line-w-thick);
+  box-shadow: var(--hard-lg);
+}
+
+/* ---------- Pozo: superficie de lectura (contrasta con la tarjeta) ---------- */
+.well {
+  background: var(--well-fill);
+  border: var(--line-w-thin) solid var(--well-stroke);
+  border-radius: 0;
+}
+
+/* ---------- Interacción: "entrar en la propia sombra" ----------
+   Hover: se levanta y la sombra crece. Active: se hunde y la sombra se apaga.
+   Transición corta (≤100ms): una animación suave rompería el estilo duro. */
+.block--lift {
+  transition: transform .09s ease, box-shadow .09s ease, background-color .09s ease;
+}
+.block--lift:hover,
+.block--lift:focus-within {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--hard-lg);
+}
+.block--lift:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .block--lift { transition: none; }
+}

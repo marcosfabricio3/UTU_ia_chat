@@ -1,0 +1,104 @@
+/* =========================================================================
+   CVlight — Base: reset + papel/tinta + tipografía + a11y
+   Dirección "BRUTALISMO": display de impacto (Archivo Black), grotesca
+   estructural (Space Grotesk), cuerpo calmado (Instrument Sans) y
+   monoespaciada (Space Mono) para etiquetas y datos.
+   ========================================================================= */
+
+*, *::before, *::after { box-sizing: border-box; }
+* { margin: 0; padding: 0; }
+
+html {
+  -webkit-text-size-adjust: 100%;
+  color-scheme: light;
+  /* Controles nativos: acento salmón, nunca azul del sistema */
+  accent-color: var(--salmon);
+  /* Canvas: papel plano (sin grilla ni degradados) */
+  background-color: var(--paper);
+}
+html[data-theme="dark"] { color-scheme: dark; }
+
+body {
+  font-family: var(--font-ui);
+  font-size: var(--step-0);
+  line-height: 1.6;
+  color: var(--ink);
+  background: transparent;
+  min-height: 100vh;
+  /* Sticky footer: el body es una columna flex; .content crece (flex:1) y
+     empuja el footer al fondo del viewport aunque la vista sea corta.
+     El orden visual no cambia: masthead · sidebar · content · footer. */
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- Tipografía ---- */
+h1 {
+  font-family: var(--font-display);
+  font-weight: 400;             /* Archivo Black ya es el peso máximo */
+  line-height: 1.02;
+  letter-spacing: -0.015em;
+}
+h2, h3 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+h1 { font-size: var(--step-3); }
+h2 { font-size: var(--step-2); }
+h3 { font-size: var(--step-1); }
+
+/* Etiquetas: monoespaciada, mayúsculas, con tracking (aire de "ficha") */
+code, kbd, samp, time { font-family: var(--font-mono); }
+
+p { max-width: 72ch; }
+
+a { color: inherit; }
+
+/* Números de datos siempre tabulares */
+table, time { font-variant-numeric: tabular-nums; }
+
+/* ---- Selección (salmón plano, no cian) ---- */
+::selection { background: var(--salmon); color: var(--salmon-ink); }
+
+/* ---- Accesibilidad base ----
+   El borde grueso "traga" el foco por defecto: siempre damos un anillo
+   explícito y contrastante (regla de la investigación neo-brutalista). */
+:focus-visible {
+  outline: var(--line-w) solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 700;
+  padding: 12px 18px;
+  border: var(--line-w) solid var(--line);
+  box-shadow: var(--hard);
+  z-index: 100;
+}
+.skip-link:focus { left: 8px; top: 8px; }
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; border: 0;
+  clip: rect(0 0 0 0); clip-path: inset(50%);
+  overflow: hidden; white-space: nowrap;
+}
+
+/* ---- Movimiento ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,838 @@
+/* =========================================================================
+   CVlight — views.css · dirección "BRUTALISMO"
+   Layout y componentes de las 3 vistas. Depende de tokens/base/blocks.
+   Reglas aplicadas: borde grueso + relleno plano + sombra dura (blur 0) +
+   esquinas rectas. Sin vidrio, sin glow, sin degradados ornamentales.
+   La ESTRUCTURA de las 3 vistas (grid, columnas, orden) NO cambia.
+   ========================================================================= */
+
+/* ---------------- Shell ---------------- */
+/* Columna izquierda fija; el contenido arranca a su derecha. */
+/* flex:1 0 auto → el contenido crece para empujar el footer al fondo
+   del viewport cuando la vista es corta (sticky footer del body flex). */
+.content { margin-left: var(--sidebar-w); flex: 1 0 auto; }
+.app {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--s5) var(--s5) var(--s8);
+}
+
+/* Navbar: bloque salmón a todo el ancho, con borde inferior grueso y
+   sombra dura (el trazo es la decoración). */
+.masthead {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--salmon);
+  border: 0;
+  border-bottom: var(--line-w-thick) solid var(--line);
+  border-radius: 0;
+  box-shadow: 0 6px 0 0 var(--line);
+}
+.masthead-inner {
+  padding: var(--s3) var(--s5);
+  display: flex;
+  align-items: center;
+  gap: var(--s5);
+}
+/* Anillo de foco DENTRO de la navbar: la barra es salmón en claro y BLANCA en
+   oscuro, así que el anillo no puede ser el acento (blanco en oscuro): usa la
+   tinta de barra (--salmon-ink = negro), visible sobre los dos rellenos. */
+.masthead :focus-visible { outline-color: var(--salmon-ink); }
+
+/* ---------------- Columna izquierda persistente ---------------- */
+.sidebar {
+  position: fixed;
+  left: 0;
+  top: var(--nav-h);
+  bottom: 0;
+  width: var(--sidebar-w);
+  z-index: 31;                 /* tapa la sombra de la navbar: una sola pieza */
+  overflow-y: auto;
+  padding: var(--s5);
+  border-radius: 0;
+  border-left: 0;
+  border-top: 0;
+  border-bottom: 0;            /* conserva sólo el borde derecho grueso */
+  box-shadow: none;
+}
+.sidebar .panel-title { margin-top: var(--s1); }
+
+@media (max-width: 720px) {
+  .masthead-inner { flex-wrap: wrap; gap: var(--s3); }
+}
+
+@media (max-width: 900px) {
+  .content { margin-left: 0; }
+  .sidebar {
+    position: static;
+    width: auto;
+    z-index: auto;
+    overflow: visible;
+    margin: var(--s5) var(--s5) 0;
+    border: var(--line-w) solid var(--line);
+    box-shadow: var(--hard);
+  }
+}
+
+/* ---------------- Footer: el negativo de la navbar (v2 discreta) ---------------- */
+/* Conserva el libro (banda TINTA en claro / SALMÓN en oscuro) pero aligera:
+   regla de 2px en vez de 4px, padding y tipografía reducidos, y hover con
+   subrayado fino en lugar del chip invertido. */
+.foot {
+  margin-left: var(--sidebar-w);
+  background: var(--ink);
+  color: var(--paper);
+  border-top: var(--line-w-thin) solid var(--paper);
+  border-radius: 0;
+}
+.foot-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--s2) var(--s4) var(--s2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s2) var(--s6);
+}
+.foot a { color: var(--paper); }
+.foot-brand { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s2); }
+.foot .foot-word { font-family: var(--font-display); font-size: 1rem; line-height: 1; color: var(--paper); }
+.foot .foot-sub {
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro-2);
+  line-height: 1.35;
+  text-transform: uppercase;
+  letter-spacing: var(--track-micro);
+  color: var(--paper);
+}
+.foot-nav { display: flex; flex-wrap: wrap; gap: var(--s3); }
+.foot-nav a {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: .875rem;
+  color: var(--paper);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-decoration-thickness: var(--line-w-thin);
+  text-underline-offset: 4px;
+}
+/* Hover discreto: subrayado papel/actual (sin chip, sin cambio de color
+   que rompería contraste sobre la banda). */
+.foot-nav a:hover { text-decoration-color: currentColor; }
+.foot-meta {
+  margin-left: auto;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro-2);
+  line-height: 1.5;
+  text-transform: uppercase;
+  letter-spacing: var(--track-micro);
+  color: var(--paper);
+}
+.foot-note {
+  flex-basis: 100%;
+  margin-top: 0;
+  font-size: var(--fs-micro);
+  line-height: 1.35;
+  color: var(--paper);
+  max-width: none;
+}
+/* Anillo de foco sobre la banda: PAPEL (visible sobre negro; en oscuro, negro
+   sobre salmón). El --focus por defecto sería invisible sobre la banda. */
+.foot :focus-visible { outline-color: var(--paper); }
+
+@media (max-width: 900px) {
+  .foot { margin-left: 0; }
+  .foot-inner { align-items: flex-start; }
+  .foot-meta { margin-left: 0; align-items: flex-start; }
+}
+
+/* ---------------- Marca ---------------- */
+.brand { display: flex; align-items: center; gap: var(--s3); min-width: 0; }
+/* Símbolo de marca: mismo que el favicon (dos recuadros desfasados = hojas de
+   CV) pero monocromo en currentColor, para adaptarse al relleno de la barra
+   (salmón en claro, blanco en oscuro). El color es --salmon-ink, igual que
+   tenía el antiguo cuadradito provisional. */
+.brand .brand-mark {
+  width: 18px; height: 18px;
+  flex: none;
+  color: var(--salmon-ink);
+}
+/* Wordmark: SVG vectorial (paths de "CVlight" en Archivo Black, assets/wordmark.svg).
+   Se dimensiona por alto y mantiene la proporción; el propio SVG trae el ratio.
+   El trazo del SVG es currentColor → como <img> se resuelve a negro (#0B0B0B),
+   el mismo --salmon-ink que usaba el texto. */
+.brand .wordmark {
+  display: block;
+  height: 1.6rem;
+  width: auto;
+}
+.brand .brand-sub {
+  font-family: var(--font-mono);
+  font-size: .75rem;
+  letter-spacing: .02em;
+  color: var(--salmon-ink);
+  opacity: .78;
+  white-space: nowrap;
+}
+@media (max-width: 560px) { .brand .brand-sub { display: none; } }
+
+/* ---------------- Tabs: control segmentado duro ---------------- */
+.tabs {
+  display: inline-flex;
+  gap: 0;
+  margin-inline: auto;
+  padding: 0;
+  overflow: hidden;
+}
+.tab {
+  font: inherit;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: .95rem;
+  cursor: pointer;
+  border: 0;
+  border-right: var(--line-w-thin) solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  padding: 9px 18px;
+  border-radius: 0;
+}
+.tab:last-child { border-right: 0; }
+.tab:hover { background: var(--salmon-tint); }
+/* Pestaña activa = sello negro prensado (tinta plena). */
+.tab[aria-selected="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+.tab[aria-selected="true"]:focus-visible { outline-color: var(--salmon-ink); }
+@media (max-width: 720px) { .tabs { order: 3; width: 100%; margin-inline: 0; } }
+
+/* Control de tema: <theme-switch> (web component v1.5.2, assets/vendor).
+   Su botón vive en shadow DOM, así que desde acá sólo se pueden tocar color y
+   tamaño (--theme-switch-icon-color / width), no las formas del ícono. */
+.theme-switch {
+  --theme-switch-icon-color: var(--salmon-ink);
+  margin-left: auto;
+  flex: none;
+  color: var(--salmon-ink);
+}
+.theme-switch:focus-within { outline: 2px solid var(--salmon-ink); outline-offset: 2px; }
+@media (max-width: 720px) { .theme-switch { margin-left: auto; } }
+
+/* ---------------- Paneles / estructura ---------------- */
+/* scroll-margin-top: al saltar con el skip-link, el contenido no queda
+   debajo de la navbar pegajosa. */
+.view { margin-top: 0; scroll-margin-top: calc(var(--nav-h) + var(--s4)); }
+.view:focus { outline: none; }
+.tabpanel:focus { outline: none; }
+.tabpanel:focus-visible { outline: var(--line-w) solid var(--focus); outline-offset: 6px; }
+
+.sub { font-size: .8125rem; color: var(--ink-2); }
+
+.panel { padding: var(--s5); }
+.panel-title {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 400;
+  margin-bottom: var(--s4);
+}
+.panel-title .sub { font-family: var(--font-ui); font-size: .8125rem; color: var(--ink-2); font-weight: 400; }
+
+/* Panel "tablero" (Vacantes): la cabecera se pinta SALMÓN y sangra hasta el marco,
+   para diferenciar al padre de sus filas-hijas. La regla que la cierra la aporta la
+   propia primera fila (border-top del .job-card). Tinta negra sobre salmón = 7.73:1 (AAA). */
+.panel--board .panel-title {
+  margin: calc(-1 * var(--s5)) calc(-1 * var(--s5)) 0;
+  padding: var(--s5) var(--s5) var(--s4);
+  background: var(--salmon);
+  color: var(--salmon-ink);
+}
+.panel--board .panel-title .sub { color: var(--salmon-ink); }
+/* La cabecera ya no aporta margen inferior (la regla la pone la 1ª fila), así que el
+   estado vacío, que no tiene filas, recupera el aire por su cuenta. */
+.panel--board .empty { margin-top: var(--s5); }
+
+/* ---------------- Formularios ---------------- */
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--s4); }
+.field label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro-2);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--track-micro);
+  color: var(--ink);
+}
+.field .req { color: var(--ink); }
+.field input, .field textarea {
+  font: inherit;
+  color: var(--ink);
+  background: var(--well-fill);
+  border: var(--line-w) solid var(--well-stroke);
+  border-radius: 0;
+  padding: 10px 12px;
+  width: 100%;
+  box-shadow: var(--hard-sm);
+}
+.field input::placeholder, .field textarea::placeholder { color: var(--ink-3); }
+.field input:focus-visible, .field textarea:focus-visible { outline-offset: 2px; }
+.field textarea { resize: vertical; min-height: 84px; }
+.field input[aria-invalid="true"], .field textarea[aria-invalid="true"] { border-color: var(--danger); }
+.field .msg { font-size: .75rem; color: var(--ink-3); }
+.field .msg.error { color: var(--danger); font-weight: 700; }
+
+/* ---------------- Botones ---------------- */
+/* CTA: bloque salmón, borde negro, sombra dura. Al pasar el mouse "se levanta";
+   al presionar "se hunde" hasta perder la sombra. */
+.btn {
+  font: inherit;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-size: .875rem;
+  cursor: pointer;
+  border-radius: 0;
+  padding: 10px 18px;
+  border: var(--line-w) solid var(--line);
+  background: var(--salmon);
+  color: var(--salmon-ink);
+  box-shadow: var(--hard);
+  transition: transform .09s ease, box-shadow .09s ease, background .09s ease;
+}
+.btn:hover { transform: translate(-2px, -2px); box-shadow: var(--hard-lg); }
+.btn:active { transform: translate(2px, 2px); box-shadow: none; }
+.btn.ghost {
+  background: var(--card);
+  color: var(--ink);
+}
+.btn.ghost:hover { background: var(--salmon-tint); }
+.btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; box-shadow: var(--hard-sm); }
+.btn.ghost[disabled]:hover { background: var(--card); }
+/* Destructivo: --danger y --card rotan con el tema, así que el par de colores
+   queda legible en claro (rojo oscuro + blanco) y en oscuro (rojo claro + negro). */
+.btn.danger { background: var(--danger); color: var(--card); }
+.btn.small { padding: 7px 12px; font-size: .75rem; }
+.btn-row { display: flex; gap: var(--s3); flex-wrap: wrap; align-items: center; }
+
+.link-btn {
+  font: inherit;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: .78rem;
+  letter-spacing: .04em;
+  cursor: pointer;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  padding: 0;
+}
+.link-btn:hover { text-decoration-color: var(--salmon); }
+
+/* ---------------- Lista de vacantes ----------------
+   Opción C: las vacantes dejan de ser cajas. Se funden con el panel padre
+   (que queda como ÚNICO marco) y se separan con una REGLA NEGRA GRUESA a
+   sangre sobre el padding del panel. La MISMA regla separa al padre de su
+   primer hijo. Resuelve a la vez (a) la falta de aire entre items y (b) la
+   ambigüedad "caja dentro de caja" del padre.
+   Aire vertical relativo y UNIFORME (.75rem por lado de la regla): todas las
+   filas llevan el mismo relleno, para que su caja —y con ella el resalte del
+   hover— mida exactamente lo mismo. */
+.job-list { list-style: none; display: flex; flex-direction: column; gap: 0; }
+.job-card {
+  padding: .75rem var(--s5);
+  margin-inline: calc(-1 * var(--s5));   /* fila y regla a sangre, hasta el marco */
+  background: none;
+  border: 0;
+  border-top: var(--line-w-thick) solid var(--line);  /* separa del padre y entre filas */
+  box-shadow: none;
+  transition: background .09s ease;
+}
+/* La última fila baja hasta el marco: se cancela el padding inferior del panel y se
+   traslada a la fila, así su resalte no queda más corto que el de las demás. */
+.job-card:last-child { padding-bottom: var(--s5); margin-bottom: calc(-1 * var(--s5)); }
+.job-card:hover { background: var(--salmon-tint); }
+/* Fila de la vacante: [título/meta] [basurero] [sello] [chevron].
+   La fila NO es un botón: el toggle es el botón del chevron y se estira con
+   ::after sobre toda la fila (patrón "botón estirado"). Gracias a eso el
+   basurero puede ser un <button> hermano —HTML válido y operable con teclado—
+   y su click no puede disparar el aria-expanded del toggle. */
+.job-head {
+  position: relative;   /* ancla del ::after del toggle */
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: var(--s4);
+  text-align: left;
+}
+/* El toggle sólo dibuja el chevron; el ::after le da la fila entera como área. */
+.job-toggle {
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+.job-toggle::after { content: ""; position: absolute; inset: 0; }
+.job-toggle:focus-visible { outline: none; }
+/* El anillo de foco abraza la fila, no el chevron de 16px. */
+.job-head:has(.job-toggle:focus-visible) { outline: var(--line-w-thin) solid var(--focus); outline-offset: 2px; }
+.job-head .j-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.job-head .jt { font-family: var(--font-display); font-size: 1.2rem; font-weight: 400; line-height: 1.2; }
+.job-head .jm { display: block; font-family: var(--font-mono); font-size: var(--fs-micro); font-weight: 700; letter-spacing: .02em; color: var(--ink-2); }
+/* Basurero: acción destructiva, siempre visible junto al sello. Va por encima
+   del ::after del toggle (de ahí el z-index) para que su click no togglee. */
+.j-trash {
+  position: relative;
+  z-index: 1;
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: color .15s ease;
+}
+.j-trash svg { display: block; }
+.j-trash:hover { color: var(--salmon-solid); }
+.j-trash:focus-visible { outline: var(--line-w-thin) solid var(--focus); outline-offset: 2px; }
+.j-trash:disabled { opacity: .45; cursor: progress; }
+.j-status {
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro-2);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--track-micro);
+  border-radius: 0;
+  padding: 3px 9px;
+  border: var(--line-w-thin) solid var(--line);
+  white-space: nowrap;
+}
+.j-status.ok { background: var(--band-strong-bg); color: var(--band-strong-ink); }
+.j-status.todo { background: var(--paper-2); color: var(--ink-2); }
+/* El indicador es un chevron de Lucide inline: chevron-down cerrado, chevron-up
+   abierto. Ya no se rota el glifo (se intercambia el ícono), así que se quita la
+   regla de rotate. */
+.job-head .chev, .d-head .chev { display: inline-flex; align-items: center; color: var(--ink-2); }
+.job-head .chev svg, .d-head .chev svg { display: block; }
+
+.job-detail { margin-top: var(--s4); padding: var(--s4); }
+.job-detail .desc { color: var(--ink-2); font-size: .9rem; margin-bottom: var(--s4); white-space: pre-wrap; }
+.job-detail .chips { margin-bottom: var(--s3); }
+
+/* ---------------- Subida de archivos ---------------- */
+.file {
+  font: inherit;
+  color: var(--ink-2);
+  width: 100%;
+  border: var(--line-w-thin) dashed var(--line);
+  border-radius: 0;
+  padding: var(--s3);
+  background: var(--paper);
+  margin-bottom: var(--s3);
+}
+.file::file-selector-button {
+  font: inherit;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: var(--fs-micro-2);
+  letter-spacing: .04em;
+  cursor: pointer;
+  margin-right: var(--s3);
+  border: var(--line-w) solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  border-radius: 0;
+  padding: 7px 12px;
+  box-shadow: var(--hard-sm);
+}
+.file:hover { border-color: var(--salmon); }
+
+/* ---------------- Estados ---------------- */
+.status { display: flex; align-items: center; gap: var(--s3); font-size: .9rem; color: var(--ink-2); margin-top: var(--s3); }
+.status.error { color: var(--danger); font-weight: 700; }
+.status.ok { color: var(--ink); font-weight: 700; }
+.spinner {
+  width: 16px; height: 16px; flex: none;
+  border: var(--line-w) solid var(--paper-2);
+  border-top-color: var(--salmon);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.empty {
+  text-align: center;
+  color: var(--ink-2);
+  padding: var(--s6) var(--s4);
+  border: var(--line-w-thin) dashed var(--line);
+  border-radius: 0;
+}
+.empty .empty-title { font-family: var(--font-display); font-size: 1.25rem; color: var(--ink); margin-bottom: var(--s2); }
+.empty .btn-row { justify-content: center; margin-top: var(--s4); }
+
+/* ---------------- Ranking: encabezado ---------------- */
+/* La cabecera se pinta con SALMÓN (el acento), como la cabecera del tablero de
+   Vacantes: la vacante "es" salmón en las dos vistas. La tinta pasa a --salmon-ink
+   (negro, 7.73:1 AAA). En oscuro rota a BLANCO con la misma tinta negra. */
+.rank-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s5);
+  padding: var(--s5);
+  margin-bottom: var(--s5);
+  background: var(--salmon);
+  color: var(--salmon-ink);
+}
+.rank-head .rh-title { font-family: var(--font-display); font-size: 1.7rem; font-weight: 400; line-height: 1.1; margin-bottom: var(--s2); color: var(--salmon-ink); }
+.rank-head .sub { color: var(--salmon-ink); }
+.rank-head .rh-stats { display: flex; gap: var(--s5); margin-left: auto; align-items: center; }
+.stat { display: flex; flex-direction: column; }
+.stat .k { font-family: var(--font-mono); font-size: var(--fs-micro-2); color: var(--ink-2); text-transform: uppercase; letter-spacing: var(--track-micro); }
+.rank-head .stat .k { color: var(--salmon-ink); }
+.stat .v { font-family: var(--font-mono); font-size: 1.2rem; font-weight: 700; }
+.rank-head .stat .v { color: var(--salmon-ink); }
+.stat-hero .k { margin-bottom: 2px; }
+.stat-hero .v { font-family: var(--font-display); font-size: 2.5rem; font-weight: 400; line-height: 1; }
+.dist { display: flex; align-items: flex-end; gap: 3px; height: 34px; }
+.dist .bar { width: 7px; min-height: 3px; border: var(--line-w-thin) solid var(--line); }
+.dist .bar.strong { background: var(--band-strong-bg); }
+.dist .bar.partial { background: var(--band-partial-bg); }
+.dist .bar.weak { background: var(--card); }
+
+/* ---------------- Ranking: dossiers ---------------- */
+/* Aire entre fichas: un escalón por encima del interno (s5=24px); con las sombras
+   de 5px el blanco real queda en ~19px. */
+.dossier-list { list-style: none; display: flex; flex-direction: column; gap: var(--s5); }
+
+.dossier { position: relative; padding: var(--s4) var(--s5) var(--s4) calc(14px + var(--s4)); }
+/* Hover: al relleno tenue del hijo de Vacantes (--salmon-tint) se le SUMA el
+   "lift" de .block--lift, no lo reemplaza. */
+.dossier:hover,
+.dossier:focus-within { background: var(--salmon-tint); }
+/* Canto de banda: franja izquierda pegada (textura para "débil", nunca sólo color). */
+.dossier::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 14px;
+  border-right: var(--line-w-thin) solid var(--line);
+}
+.dossier.band-strong::before  { background: var(--band-strong); }
+.dossier.band-partial::before { background: var(--band-partial); }
+.dossier.band-weak::before    { background: repeating-linear-gradient(45deg, var(--line) 0 3px, var(--card) 3px 6px); }
+
+/* La placa NO es un botón: el toggle es el botón del chevron y se estira con
+   ::after sobre toda la placa (patrón "botón estirado", igual que .job-head).
+   Gracias a eso el icono de "abrir PDF" puede ser un <a> hermano —HTML válido y
+   operable con teclado— y su click no dispara el aria-expanded del toggle. */
+.dossier > .d-head {
+  position: relative;         /* ancla del ::after del toggle */
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: var(--s5);
+  text-align: left;
+  color: inherit;
+}
+/* El toggle sólo dibuja el chevron; el ::after le da la placa entera como área. */
+.dossier .d-toggle {
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+.dossier .d-toggle::after { content: ""; position: absolute; inset: 0; }
+.dossier .d-toggle:focus-visible { outline: none; }
+/* El anillo de foco abraza la placa, no el chevron de 16px. */
+.dossier > .d-head:has(.d-toggle:focus-visible) { outline: var(--line-w-thin) solid var(--focus); outline-offset: 2px; }
+.dossier .d-rank { font-family: var(--font-display); font-size: 1.1rem; color: var(--ink-2); min-width: 1.4ch; }
+.dossier .d-who { min-width: 0; display: flex; flex-direction: column; gap: var(--s1); }
+.dossier .d-name { display: block; font-family: var(--font-display); font-size: 1.35rem; font-weight: 400; line-height: 1.15; }
+/* Icono "abrir el PDF" al lado del nombre: misma familia visual que el basurero
+   de la vacante y el shredder del CV. Va por encima del ::after del toggle (de
+   ahí el z-index): su click abre el PDF y no despliega la placa. */
+.dossier .d-open {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: var(--s2);
+  color: var(--ink-2);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color .15s ease;
+}
+.dossier .d-open svg { display: block; }
+.dossier .d-open:hover { color: var(--salmon-solid); }
+.dossier .d-open:focus-visible { outline: var(--line-w-thin) solid var(--focus); outline-offset: 2px; }
+.dossier .d-file { display: block; font-family: var(--font-mono); font-size: var(--fs-micro); color: var(--ink-2); }
+.dossier .d-sum { display: block; font-size: .8125rem; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70ch; margin-top: 2px; }
+
+/* Puntaje = sello numérico (fondo plano) → legible y rotundo. */
+.dossier .d-score {
+  font-family: var(--font-display);
+  font-size: 2.1rem; font-weight: 400; line-height: 1;
+  font-variant-numeric: tabular-nums;
+  padding: 4px 12px;
+  border: var(--line-w) solid var(--line);
+  min-width: 2.6em;
+  text-align: center;
+}
+.d-score.strong  { background: var(--band-strong-bg);  color: var(--band-strong-ink); }
+.d-score.partial { background: var(--band-partial-bg); color: var(--band-partial-ink); }
+.d-score.weak    { background: var(--band-weak-bg);    color: var(--band-weak-ink); }
+
+.track { height: 10px; background: var(--paper-2); border: var(--line-w-thin) solid var(--line); overflow: hidden; margin-top: var(--s4); }
+.track > span { display: block; height: 100%; }
+.track.strong > span  { background: var(--band-strong); }
+.track.partial > span { background: var(--band-partial); }
+.track.weak > span    { background: repeating-linear-gradient(45deg, var(--line) 0 3px, transparent 3px 6px); }
+
+.dossier .d-body { margin-top: var(--s5); padding: var(--s5); }
+.dossier .d-section { margin-bottom: var(--s5); }
+.dossier .d-section:last-child { margin-bottom: 0; }
+.dossier .d-section h4 {
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro-2);
+  color: var(--ink-2);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--track-micro);
+  margin-bottom: var(--s2);
+}
+.dossier .d-section p { white-space: pre-wrap; }
+.list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.list li { position: relative; padding-left: 20px; font-size: .9rem; }
+.list li::before { content: ""; position: absolute; left: 0; top: .5em; width: 9px; height: 9px; background: var(--ink-3); }
+.list.pos li::before { background: var(--line); }
+/* Gaps: cuadrado hueco salmón (forma distinta, no sólo color). */
+.list.neg li::before { background: transparent; border: var(--line-w-thin) solid var(--salmon); }
+
+.chips { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.chip {
+  display: inline-flex;            /* nombre + acción (shredder) en una línea */
+  align-items: center;
+  gap: var(--s1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  border: var(--line-w-thin) solid var(--line);
+  border-radius: 0;
+  padding: 3px 9px;
+  color: var(--ink);
+  background: var(--card);
+}
+.chip .chip-name { min-width: 0; overflow-wrap: anywhere; }
+/* Acción dentro del chip: mismo trato que el basurero de la fila (.j-trash) —
+   sin fondo ni borde, tinta secundaria (--ink-2, igual que .j-trash) y al pasar
+   el mouse se vuelve salmón sólido en los dos temas. */
+.chip-x {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: color .15s ease;
+}
+.chip-x svg { display: block; }
+.chip-x:hover { color: var(--salmon-solid); }
+.chip-x:focus-visible { outline: var(--line-w-thin) solid var(--focus); outline-offset: 2px; }
+.chip-x:disabled { opacity: .45; cursor: progress; }
+.rec { font-size: .9rem; border-left: var(--line-w-thick) solid var(--salmon); padding-left: var(--s3); color: var(--ink-2); white-space: pre-wrap; }
+
+/* Banda = sello: mono, rectángulo, con relleno plano y punto cuadrado. */
+.band {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: var(--fs-micro); font-weight: 700;
+  text-transform: uppercase; letter-spacing: var(--track-micro);
+  border-radius: 0;
+  padding: 3px 9px;
+  border: var(--line-w-thin) solid var(--line);
+}
+.band::before { content: ""; width: 8px; height: 8px; }
+.band.strong  { background: var(--band-strong-bg);  color: var(--band-strong-ink); }
+.band.strong::before  { background: var(--band-strong-ink); }
+.band.partial { background: var(--band-partial-bg); color: var(--band-partial-ink); }
+.band.partial::before { background: var(--band-partial-ink); }
+.band.weak    { background: var(--band-weak-bg);    color: var(--band-weak-ink); }
+.band.weak::before    { background: repeating-linear-gradient(45deg, var(--band-weak-ink) 0 2px, transparent 2px 4px); }
+
+/* ---------------- Chat ---------------- */
+.chat-wrap { display: flex; flex-direction: column; gap: var(--s4); }
+.toolbar { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; padding: var(--s3) var(--s4); margin-bottom: var(--s4); }
+.toolbar label { font-family: var(--font-mono); font-size: var(--fs-micro-2); text-transform: uppercase; letter-spacing: var(--track-micro); color: var(--ink); }
+.toolbar select {
+  font: inherit;
+  font-family: var(--font-heading);
+  color: var(--ink);
+  background: var(--card);
+  border: var(--line-w) solid var(--line);
+  border-radius: 0;
+  padding: 7px 10px;
+  max-width: 320px;
+  box-shadow: var(--hard-sm);
+}
+.toolbar select option, .field select option { background: var(--card); color: var(--ink); }
+
+/* ---- Chat: la barra del selector de vacante se pinta con SALMÓN (acento),
+   igual que la cabecera del Ranking: la conversación "cuelga" de la vacante.
+   En oscuro rota a BLANCO con la misma tinta negra. El chip de error conserva
+   contraste sobre la banda (papel + rojo: 6.52 claro / 6.9 oscuro). ---- */
+.chat-wrap .toolbar { background: var(--salmon); color: var(--salmon-ink); }
+.chat-wrap .toolbar label { color: var(--salmon-ink); }
+.chat-wrap .toolbar .status.error {
+  background: var(--paper);
+  color: var(--danger);
+  border: var(--line-w-thin) solid var(--line);
+  padding: 4px 10px;
+  margin: 0;
+  box-shadow: var(--hard-sm);
+}
+
+.chat-log {
+  display: flex; flex-direction: column; gap: var(--s3);
+  min-height: 320px; max-height: 56vh; overflow-y: auto;
+  padding: var(--s4);
+  /* Marco sólido: separa la conversación del resto del panel (en oscuro, salmón). */
+  border: var(--line-w) solid var(--line);
+}
+.msg { display: flex; flex-direction: column; gap: 6px; max-width: 78%; }
+.msg.user { align-self: flex-end; align-items: flex-end; }
+.msg.bot { align-self: flex-start; }
+.msg .who { font-family: var(--font-mono); font-size: var(--fs-micro-2); color: var(--ink-2); text-transform: uppercase; letter-spacing: var(--track-micro); }
+.msg.bot .who { display: inline-flex; align-items: center; gap: 6px; }
+/* Marca del asistente: cuadradito salmón. */
+.msg.bot .who::before {
+  content: ""; width: 9px; height: 9px;
+  background: var(--salmon);
+  border: var(--line-w-thin) solid var(--line);
+}
+.bubble { padding: var(--s3) var(--s4); border-radius: 0; white-space: pre-wrap; border: var(--line-w) solid var(--line); box-shadow: var(--hard-sm); }
+.msg.user .bubble { background: var(--salmon); color: var(--salmon-ink); }
+.msg.bot .bubble { background: var(--card); color: var(--ink); }
+.msg.bot.is-error .bubble { border-color: var(--danger); color: var(--danger); }
+
+/* Markdown mínimo del asistente (negrita, viñetas, numeradas, código).
+   Se mantiene el bloque recto y plano: sin viñetas redondeadas ni degradados. */
+.msg.bot .bubble p { margin: 0 0 .6em; }
+.msg.bot .bubble > :last-child { margin-bottom: 0; }
+.msg.bot .bubble ul,
+.msg.bot .bubble ol { margin: 0 0 .6em; padding-left: 1.35em; }
+.msg.bot .bubble li { margin: 0 0 .25em; }
+.msg.bot .bubble li:last-child { margin-bottom: 0; }
+.msg.bot .bubble strong { font-weight: 800; }
+.msg.bot .bubble em { font-style: italic; }
+.msg.bot .bubble code {
+  font-family: var(--font-mono);
+  font-size: .88em;
+  background: var(--salmon-tint);
+  border: var(--line-w-thin) solid var(--line);
+  padding: 0 4px;
+}
+
+/* ---------------- Diálogo de confirmación ---------------- */
+/* <dialog> nativo: showModal() aporta foco atrapado, Esc y ::backdrop. */
+/* Ojo: el reset global (* { margin: 0 }) pisa el margin:auto con el que el
+   navegador centra el diálogo; sin reponerlo queda pegado arriba a la izquierda. */
+.confirm {
+  margin: auto;          /* centrado en la ventana (position:fixed + inset:0) */
+  border: 0;
+  padding: 0;
+  background: none;
+  width: 100%;
+  max-width: min(92vw, 30rem);
+}
+.confirm::backdrop { background: rgba(11, 11, 11, .55); }
+.confirm-box {
+  margin: 0;
+  padding: var(--s5);
+  background: var(--card);
+  border: var(--line-w-thick) solid var(--line);
+  box-shadow: var(--hard-lg);
+}
+.confirm-title { font-family: var(--font-display); font-size: var(--step-1); line-height: 1.15; margin-bottom: var(--s3); }
+.confirm-msg { color: var(--ink-2); margin-bottom: var(--s5); overflow-wrap: anywhere; }
+.confirm-actions { justify-content: flex-end; }
+
+/* ---------------- Toast ---------------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 60;
+  padding: 11px 20px;
+  border-radius: 0;
+  background: var(--line);
+  border: var(--line-w) solid var(--line);
+  box-shadow: var(--hard-lg);
+  transform: translate(-50%, 12px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease, transform .2s ease;
+  color: var(--paper);
+  font-family: var(--font-heading);
+  font-weight: 700;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) {
+  .toast { transition: none; }
+}
+
+/* Resaltador de la IA: bloque salmón plano (no degradado). */
+.hl { background: var(--salmon); color: var(--salmon-ink); padding: 0 3px; }
+
+.srcs { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.srcs .src { font-family: var(--font-mono); font-size: var(--fs-micro); border: var(--line-w-thin) solid var(--line); border-radius: 0; padding: 2px 9px; color: var(--ink-2); background: var(--paper); }
+.srcs .src .sim { color: var(--ink-3); }
+
+.suggestions { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s4); }
+.suggestion {
+  font: inherit; cursor: pointer; font-size: .82rem;
+  font-family: var(--font-heading); font-weight: 700;
+  border: var(--line-w) solid var(--line); border-radius: 0;
+  padding: 7px 14px; background: var(--card); color: var(--ink);
+  box-shadow: var(--hard-sm);
+  transition: transform .09s ease, box-shadow .09s ease, background .09s ease;
+}
+.suggestion:hover { background: var(--salmon-tint); transform: translate(-2px, -2px); box-shadow: var(--hard); }
+
+.chat-form { display: flex; gap: var(--s3); padding: var(--s3) var(--s4); align-items: center; }
+.chat-form input {
+  font: inherit; color: var(--ink); background: var(--well-fill); flex: 1;
+  border: var(--line-w) solid var(--well-stroke); border-radius: 0;
+  padding: 11px 14px;
+  box-shadow: var(--hard-sm);
+}
+.chat-form input::placeholder { color: var(--ink-3); }
+.chat-form input:focus-visible { outline-offset: 2px; }
+
+.typing { display: inline-flex; gap: 6px; align-items: center; color: var(--ink-3); font-size: .85rem; font-family: var(--font-mono); }
+
+/* ---------------- Movimiento (entrada del ranking) ---------------- */
+@keyframes settle { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.settle { animation: settle .34s ease backwards; }
+@media (prefers-reduced-motion: reduce) { .settle { animation: none; } }

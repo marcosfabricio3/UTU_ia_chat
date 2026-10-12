@@ -1,0 +1,65 @@
+/* =========================================================================
+   CVlight — Fuentes self-hosted (licencias OFL en ./licenses/)
+   La demo funciona SIN internet: los .woff2 viven en el repo.
+
+   Dirección "BRUTALISMO": display de impacto + grotesca estructural + mono.
+   Pares tomados de la investigación (neubrutalism.com / NN/g):
+     display  → Archivo Black    ("no ornament, just weight")
+     heading  → Space Grotesk     ("structure meets personality")
+     body     → Instrument Sans   (calma: el body debe ser aburrido a propósito)
+     mono     → Space Mono        ("geométrica, brutalista, mecánica")
+   ========================================================================= */
+
+/* ---------- Brutalismo: fuentes de la identidad actual ---------- */
+
+/* Archivo Black — display de impacto (titulares, wordmark, cifras héroe) */
+@font-face {
+  font-family: "Archivo Black";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./archivo-black-latin-400.woff2") format("woff2");
+}
+
+/* Space Grotesk — titulares / UI / controles (grotesca con carácter) */
+@font-face {
+  font-family: "Space Grotesk Variable";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("./space-grotesk-latin-var.woff2") format("woff2-variations");
+}
+
+/* Instrument Sans — cuerpo calmado (el body debe ser aburrido a propósito) */
+@font-face {
+  font-family: "Instrument Sans Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 700;
+  font-stretch: 75% 100%;
+  src: url("./instrument-sans-latin-standard.woff2") format("woff2-variations");
+}
+
+/* Space Mono — etiquetas, datos, sellos (monoespaciada brutalista) */
+@font-face {
+  font-family: "Space Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./space-mono-latin-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Space Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./space-mono-latin-700.woff2") format("woff2");
+}
+
+/* Stacks listos para usar */
+:root {
+  --font-display: "Archivo Black", "Space Grotesk Variable", system-ui, sans-serif;
+  --font-heading: "Space Grotesk Variable", system-ui, -apple-system, sans-serif;
+  --font-ui: "Instrument Sans Variable", system-ui, -apple-system, sans-serif;
+  --font-mono: "Space Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}

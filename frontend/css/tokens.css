@@ -1,0 +1,151 @@
+/* =========================================================================
+   CVlight — Tokens · dirección "BRUTALISMO" (blanco / negro / salmón)
+   Gramática neo-brutalista en 3 reglas (investigación neubrutalism.com):
+     1) borde grueso y plano (2–4px, casi negro)  → el trazo ES el adorno
+     2) sombra dura con desplazamiento y blur 0    → "sticker", no profundidad
+     3) relleno plano y saturado                   → sin gradientes, sin blur
+   Paleta limitada a 3 colores + neutros derivados. Se elimina TODO el vidrio
+   (backdrop-filter), el glow, la roseta y la grilla.
+   La estructura de las 3 vistas NO cambia: sólo la capa visual.
+   Depende de: assets/fonts/fonts.css (--font-display/heading/ui/mono)
+   ========================================================================= */
+
+:root {
+  /* ---- Los 3 colores ---- */
+  --paper:  #FFFDF5;   /* fondo de página (off-white) */
+  --card:   #FFFFFF;   /* superficies y tarjetas */
+  --ink:    #0B0B0B;   /* texto */
+  --line:   #000000;   /* trazo estructural (bordes y sombras) */
+
+  /* Salmón: ÚNICO acento, "muy marcado". Sobre él va tinta negra (~8.3:1, AAA). */
+  --salmon:      #FF7A6B;
+  --salmon-ink:  #0B0B0B;
+  --salmon-tint: #FFE7E1;   /* relleno suave (burbuja del bot / fondos tenues) */
+  /* Salmón LITERAL, fuera de la rotación de oscuro: sigue siendo salmón en ambos
+     temas. Para usos puntuales donde el color debe leerse "salmón" y no como el
+     rol de acento (en oscuro --salmon es blanco). Ej.: hover del basurero. */
+  --salmon-solid: #FF7A6B;
+
+  /* Neutros derivados (jerarquía sin salir de la paleta) */
+  --ink-2:   #1A1A1A;   /* texto secundario (~17:1 AAA) */
+  --ink-3:   #3D3D3D;   /* etiquetas / metadatos (~10:1 AAA) */
+  --paper-2: #F1ECE0;   /* relleno secundario (tracks, pozos) */
+
+  /* ---- Trazos (regla #1) ---- */
+  --line-w:       3px;
+  --line-w-thin:  2px;
+  --line-w-thick: 4px;
+
+  /* ---- Sombras duras, blur 0 (regla #2) ----
+     La sombra se dibuja con el TRAZO (--line): al rotar los colores en oscuro,
+     la sombra pasa a salmón con él y nunca queda "negra sobre negro". */
+  --shadow-color: var(--line);
+  --hard-sm: 3px 3px 0 0 var(--shadow-color);
+  --hard:    5px 5px 0 0 var(--shadow-color);
+  --hard-lg: 8px 8px 0 0 var(--shadow-color);
+
+  /* ---- Pozos (superficie de lectura) ---- */
+  --well-fill:   var(--paper);
+  --well-stroke: var(--line);
+
+  /* ---- Bandas de puntaje: negro / salmón / blanco (+ textura), nunca sólo color ---- */
+  --band-strong:  #000000;   --band-strong-ink:  #FFFFFF;
+  --band-partial: #FF7A6B;   --band-partial-ink: #0B0B0B;
+  --band-weak-ink:    #0B0B0B;
+  /* rellenos de banda usados por sellos/chips */
+  --band-strong-bg:  #000000;
+  --band-partial-bg: #FF7A6B;
+  --band-weak-bg:    #FFFFFF;
+
+  --focus: #0B0B0B;          /* anillo de foco por defecto (visible sobre blanco y salmón) */
+
+  /* Rojo funcional: SÓLO para estados de error (no es parte de la paleta decorativa).
+     #B3261E sobre blanco ≈ 6.5:1 (AA). */
+  --danger: #B3261E;
+
+  /* ---- Layout (shell) ---- */
+  --sidebar-w: 372px;   /* columna izquierda persistente ("Nueva vacante") */
+  --nav-h:     66px;    /* alto de la navbar; JS lo ajusta al real */
+
+  /* ---- Espaciado (escala 4/8) ---- */
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 24px; --s6: 32px; --s8: 64px;
+
+  /* ---- Tipografía ---- */
+  --step-0: 1rem;
+  --step-1: 1.25rem;
+  --step-2: 1.5rem;
+  --step-3: 2rem;
+
+  /* ---- Escala micro: piso de legibilidad ----
+     Ninguna etiqueta funcional baja de 12px: la mono por debajo de ese tamaño
+     se vuelve ilegible. Se corrige con tres palancas a la vez: tamaño (piso 12px),
+     peso 700 (la mono regular es fina) y tracking corto (mayúscula + tracking
+     largo + letra chica = fatiga). Los tamaños son relativos → escalan con
+     el tamaño de fuente del usuario. */
+  --fs-micro:    .8125rem;  /* 13px · metadatos y chips */
+  --fs-micro-2:  .75rem;    /* 12px · sellos y rótulos cortos */
+  --track-micro: .06em;
+}
+
+/* =========================================================================
+   Modo oscuro = EL NEGATIVO: los tres colores ROTAN de rol.
+       salmón → blanco    el acento pasa a relleno de marca
+       blanco → negro     las superficies de lectura se apagan
+       negro  → salmón    la tinta y el trazo pasan a salmón
+   Resultado: fondo negro, superficies negras con trazo salmón y acentos blancos
+   (navbar, botones, banda "fuerte", burbuja del usuario, resaltador).
+   Se activa con el control de la navbar (html[data-theme="dark"]).
+
+   Tres reglas hacen falta para que la rotación siga siendo legible:
+   1) --ink y --line llevan el salmón LITERAL (no var(--salmon)): en oscuro
+      --salmon ya no es "el color salmón", es el ROL de acento (= blanco).
+      Igual en las bandas y en --shadow-color (que sigue a --line).
+   2) La jerarquía secundaria va por NEUTROS (blanco apagado), como en claro va
+      por grises sobre blanco: sobre negro, oscurecer el salmón sólo resta
+      contraste. ink-2 15.7:1 · ink-3 10.8:1 (AAA).
+   3) El rojo funcional (--danger) NO rota: es estado, no decoración.
+   ========================================================================= */
+html[data-theme="dark"] {
+  /* ---- Rotación de los 3 colores ---- */
+  --paper:  #0B0B0B;   /* era #FFFDF5 (papel)      → casi negro */
+  --card:   #000000;   /* era #FFFFFF (superficie) → negro pleno */
+  --ink:    #FF7A6B;   /* era #0B0B0B (tinta)      → salmón (7.71:1 AAA) */
+  --line:   #FF7A6B;   /* era #000000 (trazo)      → salmón */
+  --salmon: #FFFFFF;   /* era #FF7A6B (acento)     → blanco */
+
+  /* Neutros derivados (espejo de los del modo claro, ahora cálidos) */
+  --ink-2:   #EDE4E1;   /* texto secundario       (15.7:1 AAA) */
+  --ink-3:   #CBBDB9;   /* etiquetas / metadatos  (10.8:1 AAA) */
+  --paper-2: #241B19;   /* relleno secundario (tracks, "sin analizar") */
+
+  /* Tinte tenue del acento: en claro era un salmón casi blanco; en oscuro tiene
+     que ser un cálido OSCURO. Todos los hovers que lo usan (tab, ghost, fila de
+     vacante, sugerencia) llevan texto --ink (= salmón): sobre #FFE7E1 quedarían
+     ilegibles. */
+  --salmon-tint: #2E1512;
+
+  /* --well-fill/--well-stroke, --shadow-color y --track NO se redefinen:
+     heredan var(--paper)/var(--line)/var(--paper-2) del :root y rotan solos. */
+
+  /* ---- Bandas: la rotación, en ciclo ----
+     (relleno/tinta)  negro/blanco → salmón/negro
+                      salmón/negro → blanco/negro
+                      blanco/negro → negro/salmón      · las tres ≥8:1
+     La banda parcial NO sigue la rotación literal: blanco + tinta salmón daría
+     2.55:1 (el salmón es claro, como texto sobre blanco es ilegible). Su tinta
+     queda negra; la distinguen el relleno (blanco vs salmón vs negro) y la trama. */
+  --band-strong:  #FF7A6B;   --band-strong-ink:  #000000;
+  --band-partial: #FFFFFF;   --band-partial-ink: #000000;
+  --band-weak-ink:    #FF7A6B;
+  --band-strong-bg:  #FF7A6B;
+  --band-partial-bg: #FFFFFF;
+  --band-weak-bg:    #000000;
+
+  /* El foco usa el ACENTO (= blanco): sobre negro y sobre trazo salmón es lo
+     único inequívoco. Dentro de la navbar (blanca) el anillo pasa a tinta de
+     barra — ver .masthead :focus-visible en views.css. */
+  --focus: var(--salmon);
+
+  --danger: #FF5B5B;   /* rojo funcional, fuera de la rotación (6.4:1, AA) */
+}
