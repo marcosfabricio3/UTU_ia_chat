@@ -338,6 +338,34 @@
 }
 .link-btn:hover { text-decoration-color: var(--salmon); }
 
+/* Botón "Autocompletar": ícono Lucide + texto. Al hover/focus el ícono se pinta
+   salmón (--salmon-solid, el mismo del basurero) y hace cross-fade de "sparkle"
+   (una estrella) a "sparkles" (varias). Los dos SVG van apilados y se alternan. */
+.link-btn.autofill-btn { display: inline-flex; align-items: center; gap: 6px; }
+.autofill-btn .af-ico {
+  position: relative;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  transition: color .18s ease;
+}
+.autofill-btn .af-ico .icon {
+  position: absolute;
+  inset: 0;
+  transition: opacity .18s ease, transform .18s ease;
+}
+.autofill-btn .af-ico .icon-sparkles { opacity: 0; transform: scale(.7) rotate(-15deg); }
+.autofill-btn:hover .af-ico,
+.autofill-btn:focus-visible .af-ico { color: var(--salmon-solid); }
+.autofill-btn:hover .af-ico .icon-sparkle,
+.autofill-btn:focus-visible .af-ico .icon-sparkle { opacity: 0; transform: scale(.8) rotate(15deg); }
+.autofill-btn:hover .af-ico .icon-sparkles,
+.autofill-btn:focus-visible .af-ico .icon-sparkles { opacity: 1; transform: none; }
+.autofill-btn[disabled] { opacity: .5; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) {
+  .autofill-btn .af-ico .icon { transition: none; }
+}
+
 /* ---------------- Lista de vacantes ----------------
    Opción C: las vacantes dejan de ser cajas. Se funden con el panel padre
    (que queda como ÚNICO marco) y se separan con una REGLA NEGRA GRUESA a

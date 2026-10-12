@@ -6,7 +6,8 @@ const fs = require("fs");
 const store = require("../services/store.service");
 const scoringService = require("../services/scoring.service");
 const chatService = require("../services/chat.service");
-const { friendlyAiError } = require("../services/gemini.service");
+const { generateResponse, friendlyAiError } = require("../services/gemini.service");
+const { SUGGEST_SYSTEM_INSTRUCTION, SUGGEST_SCHEMA } = require("../prompts/suggest.prompt");
 const { rateLimit } = require("../middleware/rate-limit");
 
 const router = express.Router();
@@ -59,6 +60,19 @@ function publicJob(job) {
   return { ...job, cvs: (job.cvs || []).map(publicCv) };
 }
 
+// Mensaje de usuario para "Autocompletar": el título y, si vinieron, los
+// requisitos (que la IA debe respetar).
+function buildSuggestPrompt(titulo, requisitos) {
+  return [
+    `TÍTULO DE LA VACANTE: ${titulo}`,
+    requisitos
+      ? `REQUISITOS YA DEFINIDOS (respetalos, no los cambies; usalos como base de la descripción):\n${requisitos}`
+      : "REQUISITOS: (no se dieron; redactá una lista breve, uno por línea)",
+    "",
+    "Devolvé únicamente el JSON pedido.",
+  ].join("\n");
+}
+
 // Crear vacante
 router.post("/", (req, res) => {
   const { titulo, descripcion, requisitos } = req.body;
@@ -72,6 +86,38 @@ router.post("/", (req, res) => {
 
   const job = store.createJob({ titulo, descripcion, requisitos });
   res.status(201).json({ success: true, job: publicJob(job) });
+});
+
+// "Autocompletar": genera un borrador de vacante (requisitos + descripción) a
+// partir del título. Si se envían requisitos, los RESPETA y solo redacta la
+// descripción. Es puro texto: no toca el almacenamiento ni crea la vacante.
+// Va antes de las rutas /:id para que "suggest" nunca se lea como un id.
+router.post("/suggest", aiLimit, async (req, res) => {
+  const titulo = String((req.body && req.body.titulo) || "").trim().slice(0, 200);
+  const requisitos = String((req.body && req.body.requisitos) || "").trim().slice(0, 2000);
+
+  if (!titulo) {
+    return res.status(400).json({ success: false, message: "Indicá un título." });
+  }
+
+  try {
+    const text = await generateResponse(buildSuggestPrompt(titulo, requisitos), {
+      systemInstruction: SUGGEST_SYSTEM_INSTRUCTION,
+      responseSchema: SUGGEST_SCHEMA,
+    });
+    const data = JSON.parse(text);
+    res.json({
+      success: true,
+      requisitos: data.requisitos || "",
+      descripcion: data.descripcion || "",
+    });
+  } catch (error) {
+    console.error("Error al autocompletar la vacante:", error.message);
+    res.status(502).json({
+      success: false,
+      message: friendlyAiError(error) || "No se pudo generar el borrador.",
+    });
+  }
 });
 
 // Listar vacantes
