@@ -19,6 +19,32 @@ async function getClient() {
   return client;
 }
 
+// Errores transitorios de la IA que vale la pena reintentar: servicio saturado
+// (503), límite por minuto (429), error interno (500) o timeout (504). NO se
+// reintentan 401/403 (credencial) ni errores de formato: no cambiarían.
+function isRetriableAiError(error) {
+  const status = Number(error && (error.status || error.statusCode || error.code)) || 0;
+  if (status === 429 || status === 500 || status === 503 || status === 504) return true;
+  const msg = String((error && error.message) || "");
+  return /UNAVAILABLE|RESOURCE_EXHAUSTED|DEADLINE_EXCEEDED|overloaded|saturado/i.test(msg);
+}
+
+// Reintenta una llamada a la IA ante errores transitorios, con espera creciente
+// (1s, 2s, …). Si el último intento falla, se propaga el error original.
+async function withRetry(fn, { attempts = 3, baseDelayMs = 1000 } = {}) {
+  let lastError;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (!isRetriableAiError(error) || i === attempts - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, baseDelayMs * (i + 1)));
+    }
+  }
+  throw lastError;
+}
+
 // Genera texto. Acepta systemInstruction, responseSchema (JSON) y files (PDF inline).
 async function generateResponse(message, { systemInstruction, responseSchema, files } = {}) {
   const ai = await getClient();
@@ -39,11 +65,9 @@ async function generateResponse(message, { systemInstruction, responseSchema, fi
     }
   }
 
-  const response = await ai.models.generateContent({
-    model: geminiModel,
-    contents,
-    config,
-  });
+  const response = await withRetry(() =>
+    ai.models.generateContent({ model: geminiModel, contents, config })
+  );
 
   return response.text;
 }
@@ -51,11 +75,13 @@ async function generateResponse(message, { systemInstruction, responseSchema, fi
 async function embedTexts(texts) {
   const ai = await getClient();
 
-  const response = await ai.models.embedContent({
-    model: geminiEmbedModel,
-    contents: texts,
-    config: { outputDimensionality: embedDimensions },
-  });
+  const response = await withRetry(() =>
+    ai.models.embedContent({
+      model: geminiEmbedModel,
+      contents: texts,
+      config: { outputDimensionality: embedDimensions },
+    })
+  );
 
   return response.embeddings.map((e) => e.values);
 }

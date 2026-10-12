@@ -32,14 +32,21 @@ node -e "const fs=require('fs');const key=(fs.readFileSync('.env','utf8').match(
 - [ ] **Análisis real con éxito (E2E).**
   - Sobre la vacante ya cargada (o una nueva), subir los 5 PDFs de `sample-cvs/` y
     pulsar **"Analizar CVs"**.
-  - Esperado: estado **"Listo. Ranking actualizado."** + toast "CVs analizados.".
+  - Esperado: estado **"Listo. Se analizaron 5 CVs. Ranking actualizado."** + toast
+    "CVs analizados.".
   - Consume ~5 requests.
+
+- [ ] **Análisis incremental (no re-gasta cuota).**
+  - Con la vacante ya analizada, subir **1 CV nuevo** y pulsar **"Analizar CVs (1)"**.
+  - Esperado: se analiza **solo el nuevo** (los demás se saltan) → *"Listo. Se
+    analizaron 1 CV. Ranking actualizado."*; el botón pasa a **"Re-analizar todos"**.
+  - Consume 1 request (antes re-analizaba todos: N requests).
 
 - [ ] **Tolerancia a fallos parcial (1 OK + 1 fallido).**
   - Crear una vacante de prueba y subir **1 PDF real** (`sample-cvs/ana_perez.pdf`) +
     **1 "PDF" corrupto** (texto plano con extensión `.pdf`).
-  - Esperado: *"Analizados 1 de 2 CVs. No se pudo con: corrupto.pdf. Reintentá para
-    completar."* y el botón "Analizar" habilitado de nuevo.
+  - Esperado: *"Se analizaron 1 CV. Quedan 1 sin analizar: corrupto.pdf. <motivo> Volvé a
+    intentar para completar."* y el botón "Analizar" habilitado de nuevo.
   - Consume ~2 requests. **Ya validado con un stub** (ver sección 3), falta el caso real.
 
 - [ ] **Chat RAG con respuesta real del modelo.**
@@ -170,6 +177,33 @@ $env:GEMINI_MODEL="gemini-3.5-flash"; node src/app.js
 - **Nunca queda huérfano:** entre el nombre y el `<a>` **no** hay espacio en blanco (el hueco
   lo da `margin-left: var(--s2)`). Ese espacio era un punto de corte y, con nombres que apenas
   entraban (p. ej. "Beto Gomez"), mandaba el ícono solo a la segunda línea.
+
+### 2.6 Análisis incremental (no re-gasta cuota) — HECHO
+
+- **Problema.** `analyzeJob` re-analizaba **todos** los CVs en cada click: subir 1 CV nuevo y
+  pulsar "Analizar" volvía a llamar a la IA por los ya analizados. Cuando la IA falla (visto:
+  **503 "servicio saturado"**), esa corrida fallaba **para todos** (incluido el que ya estaba OK)
+  y el mensaje mentía: *"Analizados 0 de 2"* aunque la vacante siguiera con 1 analizado (el
+  frontend calculaba `total - failed`).
+- **Skip.** `analyzeJob(jobId, { concurrency, force })` procesa solo los **pendientes**
+  (`typeof c.score !== "number"`). Un CV que falla **no** se marca (queda sin score), así que el
+  siguiente intento lo **reintenta solo**. `force: true` re-analiza todo.
+- **Reintento automático.** `gemini.service` reintenta los errores **transitorios** (503 saturado,
+  429 límite por minuto, 500, 504) hasta 3 veces con espera creciente (1s, 2s). No reintenta
+  401/403 (credencial) ni errores de formato. Reduce muchísimo el "satisface y falla" que veía el
+  usuario.
+- **API.** `POST /api/jobs/:id/analyze` acepta `{ force: true }`, y responde
+  `{ analyzedNow, skipped, pending, failed: [{ archivo, message }] }`. Si no había nada pendiente
+  devuelve **200** con `message: "Todos los CVs ya estaban analizados."` (no es error); solo
+  responde **502** si había algo que analizar y **nada** salió bien.
+- **UI.** El botón muestra cuántos faltan — *"Analizar CVs (N)"* — y cuando ya está todo pasa a
+  *"Re-analizar todos"* (manda `force`). El badge distingue **Analizada / Parcial / Sin analizar**,
+  y el mensaje de fallo usa el estado real (`analyzedNow`, `pending`) y el **motivo** que manda el
+  backend, no `total - failed`.
+- **Verificado:** (1) con un arnés que reemplaza la IA por un stub (`%TEMP%\opencode\test-analizar.js`):
+  salta los ya analizados, reintenta solo el fallido, y `force` re-analiza los 3; (2) **E2E real**:
+  vacante con matias analizado + camila pendiente → "Analizar" procesó **solo camila**
+  (`analyzedNow: 1, skipped: 1`) y quedó el ranking con ambos (95 y 25).
 
 ---
 

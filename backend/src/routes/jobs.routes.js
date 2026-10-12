@@ -194,36 +194,62 @@ router.post("/:id/cvs", loadJob, upload.array("cvs", 20), (req, res) => {
   res.status(201).json({ success: true, count: saved.length, cvs: saved.map(publicCv) });
 });
 
-// Analizar todos los CVs de una vacante
+// Analizar los CVs de una vacante.
+// Por defecto solo procesa los CVs "pendientes" (sin score): agregar uno nuevo y
+// volver a analizar no re-gasta cuota por los ya analizados. Con body { force:
+// true } se re-analiza todo. Los que fallan quedan sin score y se reintentan solos.
 router.post("/:id/analyze", aiLimit, loadJob, async (req, res) => {
   if (!req.job.cvs.length) {
     return res.status(400).json({ success: false, message: "La vacante no tiene CVs." });
   }
 
+  const force = !!(req.body && (req.body.force === true || req.body.force === "true"));
+
   try {
-    const { job: updated, failed } = await scoringService.analyzeJob(req.params.id);
+    const { job: updated, failed, analyzedNow, skipped, pending } =
+      await scoringService.analyzeJob(req.params.id, { force });
 
     // La vacante puede haberse borrado mientras corría el análisis.
     if (!updated) {
       return res.status(404).json({ success: false, message: "La vacante ya no existe." });
     }
 
-    const analizados = (updated.cvs || []).filter((c) => typeof c.score === "number").length;
+    const failedPublic = failed.map((f) => ({ archivo: f.archivo, message: f.message }));
 
-    // Si no se pudo analizar ningún CV, devolvemos error con mensaje accionable.
-    if (!analizados) {
-      return res.status(502).json({
-        success: false,
-        message: (failed[0] && failed[0].message) || "No se pudieron analizar los CVs.",
+    // Nada que hacer: no había CVs pendientes. No es un error.
+    if (analyzedNow === 0 && failed.length === 0) {
+      return res.json({
+        success: true,
+        job: publicJob(updated),
+        analyzedNow: 0,
+        skipped,
+        pending,
+        failed: [],
+        message: "Todos los CVs ya estaban analizados.",
       });
     }
 
-    // Éxito (total o parcial): informamos qué CVs quedaron pendientes.
+    // Se intentó analizar y no se pudo ninguno: error con mensaje accionable.
+    if (analyzedNow === 0) {
+      return res.status(502).json({
+        success: false,
+        job: publicJob(updated),
+        analyzedNow: 0,
+        skipped,
+        pending,
+        failed: failedPublic,
+        message: failed[0].message || "No se pudieron analizar los CVs.",
+      });
+    }
+
+    // Éxito (total o parcial): informamos qué CVs quedaron pendientes y por qué.
     res.json({
       success: true,
       job: publicJob(updated),
-      failed: failed.map((f) => f.archivo),
-      failedCount: failed.length,
+      analyzedNow,
+      skipped,
+      pending,
+      failed: failedPublic,
     });
   } catch (error) {
     console.error("Error al analizar:", error.message);

@@ -137,7 +137,7 @@ backend/src/
 | `GET` | `/api/jobs` | Listar vacantes |
 | `GET` | `/api/jobs/:id` | Ver una vacante |
 | `POST` | `/api/jobs/:id/cvs` | Subir CVs (multipart, solo PDF) |
-| `POST` | `/api/jobs/:id/analyze` | Puntuar todos los CVs vs. la vacante |
+| `POST` | `/api/jobs/:id/analyze` | Puntuar los CVs pendientes vs. la vacante (`{ force: true }` re-analiza todo) |
 | `GET` | `/api/jobs/:id/ranking` | Ranking ordenado + KPIs |
 | `POST` | `/api/jobs/:id/chat` | Chat RAG sobre los CVs |
 

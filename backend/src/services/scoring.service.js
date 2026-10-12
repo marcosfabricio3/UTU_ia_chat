@@ -20,22 +20,31 @@ async function scoreCv(job, cv) {
   return JSON.parse(text);
 }
 
-// Analiza todos los CVs de la vacante.
+// Analiza los CVs de una vacante.
+// Por defecto procesa SOLO los que todavía no tienen score ("pendientes"): así,
+// al subir un CV nuevo y volver a analizar, no se re-gasta cuota por los que ya
+// estaban analizados. Un CV que falla NO se marca (queda sin score), por lo que
+// un nuevo intento lo reintenta automáticamente.
+// Con { force: true } se re-analiza todo (útil si cambió la vacante).
 // No se detiene ante el primer error: cada CV se puntúa de forma independiente
-// y los que fallan se devuelven en "failed" para poder informarlos y reintentar.
+// y los que fallan se devuelven en "failed" (con el motivo) para informarlos.
 // Se procesan con un pool de workers (concurrencia limitada) para no saturar la
 // API de IA cuando hay muchos CVs.
-async function analyzeJob(jobId, concurrency = 3) {
+async function analyzeJob(jobId, { concurrency = 3, force = false } = {}) {
   const job = store.getJob(jobId);
-  if (!job) return { job: null, failed: [] };
+  if (!job) return { job: null, failed: [], analyzedNow: 0, skipped: 0, pending: 0 };
+
+  const todos = job.cvs.slice();
+  const pendientes = force ? todos : todos.filter((c) => typeof c.score !== "number");
+  const skipped = todos.length - pendientes.length;
 
   const failed = [];
-  const cvs = job.cvs.slice();
+  let analyzedNow = 0;
   let cursor = 0;
 
   async function worker() {
-    while (cursor < cvs.length) {
-      const cv = cvs[cursor++];
+    while (cursor < pendientes.length) {
+      const cv = pendientes[cursor++];
       try {
         const data = await scoreCv(job, cv);
 
@@ -51,6 +60,7 @@ async function analyzeJob(jobId, concurrency = 3) {
         // updateCv es síncrono (read-modify-write completo): los workers no se
         // pisan entre sí porque no hay await dentro de la actualización.
         store.updateCv(jobId, cv.id, { ...data, vector, analizado: new Date().toISOString() });
+        analyzedNow++;
       } catch (error) {
         console.error("Error al analizar el CV", cv.archivo + ":", error.message);
         failed.push({ id: cv.id, archivo: cv.archivo, message: friendlyAiError(error) });
@@ -59,10 +69,12 @@ async function analyzeJob(jobId, concurrency = 3) {
   }
 
   const workers = [];
-  for (let i = 0; i < Math.min(concurrency, cvs.length); i++) workers.push(worker());
+  for (let i = 0; i < Math.min(concurrency, pendientes.length); i++) workers.push(worker());
   await Promise.all(workers);
 
-  return { job: store.getJob(jobId), failed };
+  const updated = store.getJob(jobId);
+  const pending = updated ? updated.cvs.filter((c) => typeof c.score !== "number").length : 0;
+  return { job: updated, failed, analyzedNow, skipped, pending };
 }
 
 // Arma el ranking ordenado + KPIs

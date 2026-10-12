@@ -107,7 +107,7 @@ frontend/
 | POST | `/api/jobs/:id/cvs` | Subir CVs (multipart, PDF) |
 | DELETE | `/api/jobs/:id/cvs/:cvId` | Eliminar un CV (+ su PDF) |
 | GET | `/api/jobs/:id/cvs/:cvId/file` | Servir el PDF de un CV (inline) |
-| POST | `/api/jobs/:id/analyze` | Puntuar CVs vs vacante |
+| POST | `/api/jobs/:id/analyze` | Puntuar los CVs pendientes vs vacante (`{ force: true }` re-analiza todo) |
 | GET | `/api/jobs/:id/ranking` | Ranking + KPIs |
 | POST | `/api/jobs/:id/chat` | Chat RAG sobre los CVs |
 | POST | `/api/chat` | Chat suelto (plantilla, sin RAG) |

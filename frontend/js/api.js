@@ -32,6 +32,7 @@ window.CV = window.CV || {};
     if (!res.ok || (data && data.success === false)) {
       const err = new Error((data && data.message) || "Error " + res.status + " del servidor.");
       err.status = res.status; // permite distinguir 404 ("ya no existe") de un fallo real
+      err.data = data; // payload completo (p. ej. la lista "failed") para quien lo necesite
       throw err;
     }
     return data;
@@ -50,7 +51,12 @@ window.CV = window.CV || {};
       for (const f of files) fd.append("cvs", f);
       return request("/jobs/" + encodeURIComponent(id) + "/cvs", { method: "POST", body: fd });
     },
-    analyze: (id) => request("/jobs/" + encodeURIComponent(id) + "/analyze", { method: "POST" }),
+    analyze: (id, force) =>
+      request("/jobs/" + encodeURIComponent(id) + "/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force: !!force }),
+      }),
     deleteJob: (id) => request("/jobs/" + encodeURIComponent(id), { method: "DELETE" }),
     deleteCv: (jobId, cvId) =>
       request(

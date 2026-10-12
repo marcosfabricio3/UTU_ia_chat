@@ -106,8 +106,35 @@ CV.views = CV.views || {};
   function jobCard(job) {
     const n = (job.cvs || []).length;
     const analyzed = (job.cvs || []).filter((c) => typeof c.score === "number").length;
+    const pendientes = Math.max(0, n - analyzed); // CVs sin analizar (nuevos o que fallaron)
     const open = expandedId === job.id;
     const st = status[job.id];
+
+    // Estado de la vacante según cuántos CVs quedan pendientes.
+    let jState = "todo";
+    let jText = "Sin analizar";
+    if (n > 0 && pendientes === 0) {
+      jState = "ok";
+      jText = "Analizada";
+    } else if (analyzed > 0) {
+      jText = "Parcial"; // algunos sí, otros pendientes
+    }
+
+    // Solo mostramos "N sin analizar" cuando hay algo ya analizado (si no, el
+    // badge "Sin analizar" ya lo dice).
+    const metaPend = analyzed > 0 && pendientes > 0 ? " · " + pendientes + " sin analizar" : "";
+
+    // El botón dice cuántos faltan; si ya está todo, ofrece re-analizar (force).
+    const analyzeLabel =
+      pendientes === 0
+        ? "Re-analizar todos"
+        : pendientes === n
+          ? "Analizar CVs"
+          : "Analizar CVs (" + pendientes + ")";
+    const analyzeTitle =
+      pendientes === 0
+        ? "Volver a analizar todos los CVs de la vacante"
+        : "Analizar solo los CVs que todavía no tienen resultado";
 
     // Cada chip de CV lleva al final un "shredder" (Lucide) que borra ESE CV.
     // La identidad va en data-* (ids reales), igual que en el resto de la vista.
@@ -134,11 +161,11 @@ CV.views = CV.views || {};
         <div class="job-head">
           <span class="j-main">
             <span class="jt">${esc(job.titulo)}</span>
-            <span class="jm">${n} CV${n === 1 ? "" : "s"}${analyzed ? " · " + analyzed + " analizado" + (analyzed === 1 ? "" : "s") : ""}</span>
+            <span class="jm">${n} CV${n === 1 ? "" : "s"}${analyzed ? " · " + analyzed + " analizado" + (analyzed === 1 ? "" : "s") : ""}${metaPend}</span>
           </span>
           <button class="j-trash" type="button" data-action="delete" data-job="${esc(job.id)}"
                   aria-label="Eliminar la vacante «${esc(job.titulo)}»" ${deleting.has(job.id) ? "disabled" : ""}>${icon("trash")}</button>
-          <span class="j-status ${analyzed ? "ok" : "todo"}">${analyzed ? "Analizada" : "Sin analizar"}</span>
+          <span class="j-status ${jState}">${jText}</span>
           <button class="job-toggle" type="button" data-job="${esc(job.id)}" aria-expanded="${open}" aria-controls="jd-${esc(job.id)}">
             <span class="chev" aria-hidden="true">${icon(open ? "chevron-up" : "chevron-down")}</span>
             <span class="visually-hidden">Detalle de la vacante «${esc(job.titulo)}»</span>
@@ -152,7 +179,7 @@ CV.views = CV.views || {};
                  accept="application/pdf" multiple aria-label="Subir CVs en PDF para esta vacante">
           <div class="btn-row">
             <button class="btn small" type="button" data-action="upload" data-job="${esc(job.id)}" disabled>Subir CVs</button>
-            <button class="btn small ghost" type="button" data-action="analyze" data-job="${esc(job.id)}" ${n && !analyzing.has(job.id) ? "" : "disabled"}>Analizar CVs</button>
+            <button class="btn small ghost" type="button" data-action="analyze" data-job="${esc(job.id)}" title="${esc(analyzeTitle)}" ${n && !analyzing.has(job.id) ? "" : "disabled"}>${analyzeLabel}</button>
             ${
               analyzed
                 ? `<button class="link-btn" type="button" data-action="ranking" data-job="${esc(job.id)}">Ver ranking</button>`
@@ -286,30 +313,65 @@ CV.views = CV.views || {};
 
   async function analyze(id) {
     if (analyzing.has(id)) return; // evita doble envío (doble clic / Enter)
+
+    // Decidimos el modo según el estado actual: si ya está todo analizado, el
+    // botón "Re-analizar todos" fuerza el re-análisis; si no, solo se procesan
+    // los pendientes (CVs nuevos o que fallaron antes).
+    const job = (CV.app.state.jobs || []).find((j) => j.id === id);
+    const cvs = (job && job.cvs) || [];
+    const analyzed = cvs.filter((c) => typeof c.score === "number").length;
+    const pendientes = Math.max(0, cvs.length - analyzed);
+    const force = analyzed > 0 && pendientes === 0;
+    const aAnalizar = pendientes || cvs.length;
+
     analyzing.add(id);
-    status[id] = { type: "loading", text: "Analizando CVs con la IA… puede tardar un poco." };
+    status[id] = {
+      type: "loading",
+      text: force
+        ? "Re-analizando todos los CVs con la IA… puede tardar un poco."
+        : "Analizando " + aAnalizar + " CV" + (aAnalizar === 1 ? "" : "s") + " con la IA… puede tardar un poco.",
+    };
     render();
 
+    const nombre = (f) => (typeof f === "string" ? f : (f && f.archivo) || "un CV");
+
     try {
-      const data = await api.analyze(id);
+      const data = await api.analyze(id, force);
       const failed = data.failed || [];
-      const total = ((data.job || {}).cvs || []).length;
+      const now = data.analyzedNow || 0;
+      const pending = typeof data.pending === "number" ? data.pending : failed.length;
       await CV.app.loadJobs();
 
       if (failed.length) {
+        const motivo = (failed[0] && failed[0].message) || "";
         status[id] = {
           type: "error",
           text:
-            "Analizados " + (total - failed.length) + " de " + total + " CVs. No se pudo con: " +
-            failed.join(", ") + ". Reintentá para completar.",
+            "Se analizaron " + now + " CV" + (now === 1 ? "" : "s") + "." +
+            (pending ? " Quedan " + pending + " sin analizar: " + failed.map(nombre).join(", ") + "." : "") +
+            (motivo ? " " + motivo : "") +
+            " Volvé a intentar para completar.",
         };
         CV.app.toast("Análisis incompleto: falló " + failed.length + " CV" + (failed.length === 1 ? "" : "s") + ".");
+      } else if (now === 0) {
+        status[id] = { type: "ok", text: data.message || "No había CVs nuevos para analizar." };
+        CV.app.toast("No había CVs nuevos para analizar.");
       } else {
-        status[id] = { type: "ok", text: "Listo. Ranking actualizado." };
+        status[id] = {
+          type: "ok",
+          text: "Listo. Se analizaron " + now + " CV" + (now === 1 ? "" : "s") + ". Ranking actualizado.",
+        };
         CV.app.toast("CVs analizados.");
       }
     } catch (err) {
-      status[id] = { type: "error", text: err.message };
+      // 502: no se pudo analizar ninguno. El error trae el motivo y la lista de
+      // CVs que fallaron (err.data.failed), que espejamos para dar contexto.
+      const failed = (err && err.data && err.data.failed) || [];
+      const nombres = failed.map(nombre).join(", ");
+      status[id] = {
+        type: "error",
+        text: err.message + (nombres ? " No se pudo con: " + nombres + "." : ""),
+      };
     } finally {
       analyzing.delete(id);
       render();
