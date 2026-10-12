@@ -7,7 +7,7 @@ CV.views = CV.views || {};
 (function (CV) {
   "use strict";
 
-  const { esc, prettifyName, richText } = CV.util;
+  const { esc, prettifyName, richText, icon } = CV.util;
   const api = CV.api;
 
   let panelEl = null;
@@ -69,7 +69,7 @@ CV.views = CV.views || {};
           <form class="chat-form" id="chat-form">
             <label class="visually-hidden" for="chat-input">Escribí tu pregunta</label>
             <input id="chat-input" type="text" autocomplete="off" placeholder="Escribí tu pregunta…" ${analyzed ? "" : "disabled"}>
-            <button class="btn" type="submit" ${analyzed ? "" : "disabled"}>Enviar</button>
+            <button class="btn chat-send" type="submit" aria-label="Enviar" ${analyzed ? "" : "disabled"}>${icon("send-horizontal", 18)}</button>
           </form>
         </section>
       </div>`;

@@ -253,6 +253,16 @@ $env:GEMINI_MODEL="gemini-3.5-flash"; node src/app.js
   `keydown` + foco visible → `html.kb` + `outline: 2px solid rgb(11,11,11)`. `pointerdown` → sin
   anillo. **Ok.**
 
+### 2.9 Botón "Enviar" del chat como ícono (`send-horizontal`)
+- **Cambio.** El botón de enviar del chat pasa de texto (`Enviar`) al ícono Lucide
+  **`send-horizontal`** (agregado al set curado de `a11y.js`), con `aria-label="Enviar"` (el SVG va
+  `aria-hidden`).
+- **Proporción.** Para que **no** quede cuadrado, `.chat-send` (`css/views.css`) usa
+  `min-width: 5.8rem` (≈ el ancho del botón de texto) + `align-self: stretch` (el alto sigue al del
+  input) y centra el ícono con `inline-flex`.
+- **Verificado (navegador).** Botón 93×54 px (relación ~1.7:1, rectangular), 1 SVG `icon-send-horizontal`
+  de 18 px, `aria-label="Enviar"`, alto igual al input y consola limpia. **Ok.**
+
 ---
 
 ## 3. Ya verificado (para contraste — NO volver a gastar cuota en esto)
