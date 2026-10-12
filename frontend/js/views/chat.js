@@ -69,7 +69,7 @@ CV.views = CV.views || {};
           <form class="chat-form" id="chat-form">
             <label class="visually-hidden" for="chat-input">Escribí tu pregunta</label>
             <input id="chat-input" type="text" autocomplete="off" placeholder="Escribí tu pregunta…" ${analyzed ? "" : "disabled"}>
-            <button class="btn chat-send" type="submit" aria-label="Enviar" ${analyzed ? "" : "disabled"}>${icon("send-horizontal", 18)}</button>
+            <button class="btn chat-send" type="submit" aria-label="Enviar" ${analyzed ? "" : "disabled"}>${icon("send-horizontal", 20)}</button>
           </form>
         </section>
       </div>`;
