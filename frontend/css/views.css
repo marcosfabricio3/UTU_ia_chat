@@ -891,6 +891,15 @@ html.kb .theme-switch:focus-within { outline: 2px solid var(--salmon-ink); outli
   .msg.bot.is-streaming .bubble::after { animation: none; }
 }
 
+/* Aviso de failover: "se cortó y reinicio con otro modelo". */
+.stream-note {
+  display: block;
+  color: var(--ink-3);
+  font-size: .8rem;
+  font-family: var(--font-mono);
+  margin-bottom: var(--s2);
+}
+
 .typing { display: inline-flex; gap: 6px; align-items: center; color: var(--ink-3); font-size: .85rem; font-family: var(--font-mono); }
 
 /* ---------------- Movimiento (entrada del ranking) ---------------- */

@@ -14,6 +14,7 @@ CV.views = CV.views || {};
   let jobId = null;
   let loading = false;
   let streaming = false;
+  let statusText = "Leyendo los CVs…"; // texto del indicador mientras se espera
   let messages = []; // { role: 'user'|'bot', text, sources?, error?, streaming? }
   let history = [];  // [{ role:'user'|'assistant', content }]
 
@@ -115,7 +116,7 @@ CV.views = CV.views || {};
     log.innerHTML =
       messages.map(msgHtml).join("") +
       (loading
-        ? `<div class="msg bot"><span class="who">CVlight</span><span class="typing"><span class="spinner" aria-hidden="true"></span>Leyendo los CVs…</span></div>`
+        ? `<div class="msg bot"><span class="who">CVlight</span><span class="typing"><span class="spinner" aria-hidden="true"></span>${esc(statusText)}</span></div>`
         : "");
 
     // Mientras la respuesta se escribe, no anunciamos cada fragmento: el lector
@@ -128,16 +129,16 @@ CV.views = CV.views || {};
 
   // Actualiza solo la burbuja que se está escribiendo (sin re-renderizar todo
   // el log en cada fragmento). El HTML final se aplica en el renderLog de cierre.
-  function updateStreamBubble(text) {
+  // Reusa msgHtml para que un aviso (m.note) quede bien dibujado.
+  function updateStreamBubble(bot) {
     const log = panelEl.querySelector("#chat-log");
     if (!log) return;
-    const bubbles = log.querySelectorAll(".msg.bot .bubble");
-    const bubble = bubbles[bubbles.length - 1];
-    if (!bubble) {
+    const node = log.querySelector(".msg.bot.is-streaming");
+    if (!node) {
       renderLog();
       return;
     }
-    bubble.textContent = text;
+    node.outerHTML = msgHtml(bot);
     log.scrollTop = log.scrollHeight;
   }
 
@@ -148,7 +149,8 @@ CV.views = CV.views || {};
     const names = (m.sources || []).map((s) => prettifyName(s.archivo));
     // Respuesta en curso: texto plano + cursor. Al terminar se re-renderiza con Markdown y fuentes.
     if (m.streaming) {
-      return `<div class="msg bot is-streaming"><span class="who">CVlight</span><div class="bubble">${esc(m.text)}</div></div>`;
+      const note = m.note ? `<span class="stream-note">${esc(m.note)}</span>` : "";
+      return `<div class="msg bot is-streaming"><span class="who">CVlight</span>${note}<div class="bubble">${esc(m.text)}</div></div>`;
     }
     // Los errores se muestran como texto plano; las respuestas, con Markdown mínimo.
     const body = m.error ? esc(m.text) : richText(m.text, names);
@@ -189,6 +191,7 @@ CV.views = CV.views || {};
     const sugg = panelEl.querySelector("#chat-suggestions");
     if (sugg) sugg.remove();
 
+    statusText = "Leyendo los CVs…";
     renderLog();
 
     // Sin soporte de streaming, mismo camino de siempre (espera completa).
@@ -227,17 +230,31 @@ CV.views = CV.views || {};
         onSources: (f) => {
           fuentes = f || [];
         },
+        // El backend cambió de modelo antes de escribir: solo informamos.
+        onNotice: (message) => {
+          if (jobId !== myJobId || bot || !message) return;
+          statusText = message;
+          renderLog();
+        },
+        // Se cortó a mitad: el texto parcial no sirve, vaciamos y avisamos.
+        onRestart: (message) => {
+          if (jobId !== myJobId || !bot) return;
+          bot.text = "";
+          bot.note = message || "Reintentando con otro modelo…";
+          updateStreamBubble(bot);
+        },
         onDelta: (chunk) => {
           if (!chunk || jobId !== myJobId) return;
           if (!bot) {
             loading = false;
             streaming = true;
-            bot = { role: "bot", text: "", sources: [], streaming: true };
+            bot = { role: "bot", text: "", note: null, sources: [], streaming: true };
             messages.push(bot);
             renderLog();
           }
+          bot.note = null;
           bot.text += chunk;
-          updateStreamBubble(bot.text);
+          updateStreamBubble(bot);
         },
       });
       if (result && result.fuentes) fuentes = result.fuentes;
@@ -251,6 +268,7 @@ CV.views = CV.views || {};
         return;
       }
       // Se cortó a mitad: dejamos lo que llegó y avisamos.
+      bot.note = null;
       bot.text += (bot.text ? "\n\n" : "") + "⚠ " + (error.message || "Se cortó la respuesta.");
     } finally {
       loading = false;
@@ -262,6 +280,7 @@ CV.views = CV.views || {};
       messages.push(bot);
     }
     bot.streaming = false;
+    bot.note = null;
     bot.sources = fuentes;
     if (!bot.text) bot.text = "No tengo una respuesta para eso.";
 

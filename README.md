@@ -51,12 +51,24 @@ también se puede abrir con `file://` porque el backend tiene CORS abierto.)
 | `GEMINI_API_KEY` | — (**obligatoria**) | Credencial de Gemini |
 | `PORT` | `3000` | Puerto del servidor |
 | `GEMINI_MODEL` | `gemini-3.8-flash` | Modelo de texto del **scoring** (batch) |
-| `GEMINI_CHAT_MODEL` | `GEMINI_MODEL` | Modelo del **chat** (interactivo) |
-| `GEMINI_SUGGEST_MODEL` | `gemini-3.5-flash-lite` | Modelo de **Autocompletar** (liviano) |
+| `GEMINI_SUGGEST_MODELS` | `GEMINI_SUGGEST_MODEL` + respaldos | Cadena de modelos de **Autocompletar** (orden de preferencia) |
+| `GEMINI_CHAT_MODELS` | `GEMINI_CHAT_MODEL` + respaldos | Cadena de modelos del **chat** |
+| `GEMINI_SCORING_MODELS` | `GEMINI_MODEL` + respaldos | Cadena de modelos del **scoring** |
+| `GEMINI_SUGGEST_MODEL` / `GEMINI_CHAT_MODEL` | `GEMINI_MODEL` | Modelo único de cada tarea (si no hay cadena `*_MODELS`) |
 | `GEMINI_EMBED_MODEL` | `gemini-embedding-001` | Modelo de embeddings |
 | `GEMINI_THINKING_LEVEL_{SUGGEST,CHAT,SCORING}` | `low`, `low`, `high` | Razonamiento de Gemini 3 (`low` = más rápido) |
-| `AI_REQUEST_TIMEOUT_MS` | `120000` | Corte por intento contra la IA (ms) |
-| `GEMINI_RETRIES_{INTERACTIVE,BATCH}` | `2`, `3` | Reintentos ante 503/429 |
+| `AI_REQUEST_TIMEOUT_MS` | `45000` | Corte por intento contra la IA (ms) |
+| `AI_TOTAL_TIMEOUT_MS` | `120000` | Tope total por consulta/CV, sumando intentos (ms) |
+| `AI_FAILOVER_ROUNDS` | `2` | Vueltas a la cadena antes de rendirse |
+| `AI_MODEL_COOLDOWN_MS` | `45000` | Enfriamiento de un modelo que falló (circuit breaker) |
+| `AI_SAME_MODEL_RETRIES` | `1` | Reintentos del mismo modelo ante 429 por minuto |
+| `AI_QUOTA_SWITCH_SECONDS` | `60` | RetryDelay desde el que se considera cuota agotada (salta de modelo) |
+| `GEMINI_RETRIES_{INTERACTIVE,BATCH}` | `2`, `3` | Reintentos de **embeddings** ante 503/429 |
+
+**Failover de modelos:** si el primero de la cadena está saturado (`503`), tiene la
+cuota diaria agotada (`429`), fue retirado (`404`) o se corta la conexión, se pasa
+al siguiente **sin cortar la consulta**. Un `401/403/400` es fatal y no se reintenta.
+Un modelo que falla se enfría (pasa al final de la cadena) durante `AI_MODEL_COOLDOWN_MS`.
 
 ## Endpoints
 
@@ -73,7 +85,7 @@ también se puede abrir con `file://` porque el backend tiene CORS abierto.)
 | `POST` | `/api/jobs/:id/analyze` | Puntuar los CVs **pendientes** (los ya analizados se saltan; `{ force: true }` re-analiza todo) |
 | `GET` | `/api/jobs/:id/ranking` | Ranking ordenado + KPIs |
 | `POST` | `/api/jobs/:id/chat` | Chat RAG sobre los CVs de la vacante |
-| `POST` | `/api/jobs/:id/chat/stream` | Igual que el anterior, en **streaming (SSE)**: `sources` → `delta`* → `done` |
+| `POST` | `/api/jobs/:id/chat/stream` | Igual que el anterior, en **streaming (SSE)**: `sources` → (`notice`) → `delta`* → (`restart` → `delta`*) → `done` |
 | `POST` | `/api/chat` | Chat suelto (plantilla original, sin RAG) |
 | `GET` | `/api/chat/models` | Diagnóstico: lista los modelos en consola |
 

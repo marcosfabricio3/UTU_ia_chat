@@ -15,6 +15,9 @@ window.CV = window.CV || {};
   // Corta las esperas: si la IA no responde en este tiempo, avisamos en vez de
   // dejar la UI "cargando" para siempre. 0 desactiva el corte.
   const DEFAULT_TIMEOUT_MS = 120000;
+  // El chat en streaming puede encadenar varios modelos: el backend corta a los
+  // 120s, pero un intento en curso puede estirarse; damos margen de sobra.
+  const STREAM_TIMEOUT_MS = 180000;
   const OFFLINE_MSG =
     "No se pudo conectar con el servidor. ¿Está corriendo el backend en http://localhost:3000?";
   const TIMEOUT_MSG = "La IA tardó demasiado en responder. Probá de nuevo.";
@@ -70,9 +73,13 @@ window.CV = window.CV || {};
   // Chat en streaming: llama a `onDelta(fragmento)` a medida que llega el texto
   // y resuelve con { fuentes } al terminar. Usa fetch + ReadableStream (no
   // EventSource, porque necesitamos POST con body).
+  //
+  // Failover: si el backend cambia de modelo en el medio, avisa con `notice`
+  // (cambio silencioso, todavía sin texto) o `restart` (el texto parcial ya no
+  // sirve: el cliente debe vaciar la burbuja). Después siguen más `delta`.
   async function chatStream(id, message, history, handlers = {}) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), STREAM_TIMEOUT_MS);
     let res;
 
     try {
@@ -121,6 +128,10 @@ window.CV = window.CV || {};
             if (handlers.onSources) handlers.onSources(fuentes);
           } else if (evt.event === "delta") {
             if (handlers.onDelta) handlers.onDelta(String(evt.data || ""));
+          } else if (evt.event === "notice") {
+            if (handlers.onNotice) handlers.onNotice(String((evt.data && evt.data.message) || ""));
+          } else if (evt.event === "restart") {
+            if (handlers.onRestart) handlers.onRestart(String((evt.data && evt.data.message) || ""));
           } else if (evt.event === "error") {
             throw new Error((evt.data && evt.data.message) || "No se pudo responder la pregunta.");
           }
@@ -155,11 +166,13 @@ window.CV = window.CV || {};
         timeoutMs: 600000,
       }),
     // "Autocompletar": la IA redacta requisitos/descripción a partir del título.
+    // Puede encadenar modelos si el primero está saturado, por eso damos margen.
     suggestJob: (payload) =>
       request("/jobs/suggest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        timeoutMs: 180000,
       }),
     deleteJob: (id) => request("/jobs/" + encodeURIComponent(id), { method: "DELETE" }),
     deleteCv: (jobId, cvId) =>
