@@ -1,0 +1,56 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1744 >>
+stream
+BT /F2 19.00 Tf 55.00 792.00 Td (Matías Ferreyra) Tj ET
+BT /F2 11.50 Tf 55.00 768.00 Td (Desarrollador Frontend Junior) Tj ET
+BT /F1 9.50 Tf 55.00 753.50 Td (matías.ferreyra23@gmail.com | +598 98 112 233) Tj ET
+BT /F1 9.50 Tf 55.00 741.00 Td (Salto, Uruguay | 23 años) Tj ET
+BT /F2 11.50 Tf 55.00 717.50 Td (PERFIL) Tj ET
+BT /F1 10.50 Tf 55.00 702.00 Td (Desarrollador frontend junior con un año de experiencia. Manejo HTML, CSS y JavaScript, y) Tj ET
+BT /F1 10.50 Tf 55.00 688.50 Td (estoy dando mis primeros pasos con React. Busco seguir creciendo en un equipo donde pueda) Tj ET
+BT /F1 10.50 Tf 55.00 675.00 Td (aprender.) Tj ET
+BT /F2 11.50 Tf 55.00 654.50 Td (EXPERIENCIA LABORAL) Tj ET
+BT /F2 10.50 Tf 55.00 639.00 Td (Desarrollador Web - Agencia Pixel \(2024 - actual\)) Tj ET
+BT /F1 10.50 Tf 69.00 624.50 Td (Maquetado de sitios institucionales con HTML, CSS y JavaScript.) Tj ET
+BT /F1 10.50 Tf 69.00 610.00 Td (Ajustes de diseño responsive y correccion de estilos en sitios existentes.) Tj ET
+BT /F2 10.50 Tf 55.00 595.50 Td (Pasante - Intendencia de Salto \(2023\)) Tj ET
+BT /F1 10.50 Tf 69.00 581.00 Td (Apoyo en la carga de contenido y mantenimiento del sitio web municipal.) Tj ET
+BT /F2 11.50 Tf 55.00 560.50 Td (ESTUDIOS) Tj ET
+BT /F2 10.50 Tf 55.00 545.00 Td (Bachillerato Tecnológico en Informática - UTU \(2018 - 2021\)) Tj ET
+BT /F2 10.50 Tf 55.00 530.50 Td (Curso de Desarrollo Web Front End - plataforma online \(2023\)) Tj ET
+BT /F2 11.50 Tf 55.00 510.00 Td (CONOCIMIENTOS) Tj ET
+BT /F1 10.50 Tf 55.00 494.50 Td (HTML5, CSS3, JavaScript \(básico\), React \(básico\), Bootstrap, WordPress, Git \(básico\).) Tj ET
+BT /F2 11.50 Tf 55.00 474.00 Td (IDIOMAS) Tj ET
+BT /F1 10.50 Tf 55.00 458.50 Td (Inglés básico \(A2\).) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000002047 00000 n 
+0000002144 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+2246
+%%EOF
