@@ -69,6 +69,8 @@ también se puede abrir con `file://` porque el backend tiene CORS abierto.)
 cuota diaria agotada (`429`), fue retirado (`404`) o se corta la conexión, se pasa
 al siguiente **sin cortar la consulta**. Un `401/403/400` es fatal y no se reintenta.
 Un modelo que falla se enfría (pasa al final de la cadena) durante `AI_MODEL_COOLDOWN_MS`.
+La cadena por defecto termina en `gemini-3.1-flash-lite`, cuyo bucket diario es
+independiente del de la familia 3.5/3.6/3.8 (sobrevive si ese cupo se agota).
 
 ## Endpoints
 

@@ -9,34 +9,39 @@ automático de modelos** (si uno está saturado, se usa otro sin cortar la consu
 
 ## 1. Estado de la IA (cuota / saturación) — al 13/10
 
-La **cuota diaria** (429) se resetea. Lo que sigue es **saturación transitoria** (503) del
-modelo principal `gemini-3.8-flash`: la API responde
-*"This model is currently experiencing high demand…"*. Medición del **13/10**:
+La **cuota diaria** (429) es lo que manda. Los flash de esta cuenta comparten/aliasan el
+mismo bucket: `3.8-flash`, `3.7-flash`, `3.6-flash`, `3.5-flash` y `3.5-flash-lite` caen en el
+mismo cupo **free tier de 20 req/día** (lo confirma el propio mensaje: *"limit: 20, model:
+gemini-3.6-flash"* + *"retry in 8h52m"*). Medición del **13/10 (tarde)**:
 
 | Modelo | Estado | Latencia típica |
 |---|---|---|
-| `gemini-3.8-flash` (principal) | **503** intermitente | — (falla) |
-| `gemini-3.5-flash` | OK | ~3 s |
-| `gemini-3.5-flash-lite` (Autocompletar) | OK | ~16–30 s |
+| `gemini-3.8-flash` (principal) | **429** (bucket `3.6-flash` agotado) | — (rápido) |
+| `gemini-3.5-flash` | **429** (mismo bucket) | — (rápido) |
+| `gemini-3.5-flash-lite` | **504** (timeout/saturado) | > 45 s |
+| `gemini-3.1-flash-lite` | **OK** (bucket propio) | ~10 s |
 | `gemini-embedding-001` | OK (cuota aparte) | ~0,4 s |
 
-> Si `gemini-3.8-flash` sigue saturado para la demo: `GEMINI_MODEL=gemini-3.5-flash` en
-> `backend/.env` (afecta chat y scoring). Es una variable de entorno, no hace falta tocar código.
-> **Igual, ya no es imprescindible: el failover (§2.11) pasa solo a `gemini-3.5-flash` cuando el
-> principal responde 503.**
+> **Clave para la demo:** el **bucket de `3.1-flash-lite` es independiente** del de la familia
+> 3.5/3.6/3.8. Por eso se lo agregó como **último recurso** de las tres cadenas (ver §2.11): si
+> el cupo "flash" se agota, el failover cae solo en `3.1-flash-lite` y la consulta **no se corta**.
 
 ### 1.1 Checklist a completar cuando el modelo principal responda
 
-- [ ] **Análisis real con éxito (E2E).**
-  - Sobre la vacante ya cargada (o una nueva), subir los 5 PDFs de `sample-cvs/` y
-    pulsar **"Analizar CVs"**.
-  - Esperado: estado **"Listo. Se analizaron 5 CVs. Ranking actualizado."** + toast
-    "CVs analizados.".
-  - Consume ~5 requests.
-  - **Estado al 13/10:** el camino de código **se ejecuta** (llega a la API y hace failover
-    si el modelo falla), pero el análisis **no se completó** por **429 (cuota diaria de
-    `3.8-flash`)** + **503** intermitente de `3.5-flash`. **Pendiente reintentar cuando baje
-    la saturación.** El failover de la cadena de scoring está probado con stubs (§2.11).
+- [x] **Análisis real con éxito (E2E).** — **HECHO (13/10, tarde)**
+  - Vacante `9554787a-ffda-4197-a88a-3d8f0c9cf318` (1 CV, `matias_ferreyra.pdf`), `POST
+    /api/jobs/:id/analyze`.
+  - **Resultado:** `http=200` en **53,6 s**, `analyzedNow=1`, `skipped=0`, `pending=0`.
+  - El CV quedó con **score 5**, `anios_experiencia 1`, **vector de 768 d** y
+    `texto_extraido` (890 chars) guardados en el store; `GET /ranking` devuelve `total=1`,
+    `promedio=5` con `resumen`/`fortalezas`/`gaps`/`recomendacion` completos.
+  - **Cómo se completó pese a la cuota:** la cadena hizo failover en vivo —
+    `3.8-flash` **429** → `3.5-flash` **429** → `3.5-flash-lite` **504/timeout** →
+    **`3.1-flash-lite` OK (~10 s)**. No hubo que tocar nada a mano: es el mismo mecanismo de
+    §2.11 aplicado a `scoring`. (El `vector` no viaja en la respuesta del API público; se
+    verificó leyendo el store.)
+  - _Nota histórica:_ la corrida previa del 13/10 (mañana) no había completado por 429 diaria;
+    se resolvió agregando el recurso `3.1-flash-lite` (bucket propio).
 
 - [ ] **Análisis incremental (no re-gasta cuota).**
   - Con la vacante ya analizada, subir **1 CV nuevo** y pulsar **"Analizar CVs (1)"**.
@@ -319,8 +324,10 @@ $env:GEMINI_MODEL="gemini-3.5-flash"; node src/app.js
   - `fatal` — **400/401/403/422**: no se reintenta (se informa el error).
 - **Cadena por tarea** (`config.js`): `GEMINI_{SUGGEST,CHAT,SCORING}_MODELS` (lista separada por
   comas, en orden de preferencia). Por defecto: el modelo de la tarea + `gemini-3.5-flash` +
-  `gemini-3.5-flash-lite`. **Ojo:** dos alias de la misma familia comparten cuota, por eso la cadena
-  usa **familias distintas**.
+  `gemini-3.5-flash-lite` + `gemini-3.1-flash-lite`. **Ojo:** dos alias de la misma familia comparten
+  cuota, por eso la cadena usa **familias y buckets distintos** — `3.1-flash-lite` va **último
+  justamente porque su bucket es independiente** del de la familia 3.5/3.6/3.8, así que sobrevive
+  cuando el cupo "flash" se agota (ver §1).
 - **Motor** (`runWithFallback`/`attemptPlan`): recorre la cadena `AI_FAILOVER_ROUNDS` veces (default
   **2**) con un tope total de `AI_TOTAL_TIMEOUT_MS` (**120 s**) por consulta/CV, y `AI_REQUEST_TIMEOUT_MS`
   (**45 s**) por intento.
@@ -342,6 +349,9 @@ $env:GEMINI_MODEL="gemini-3.5-flash"; node src/app.js
   - **Real:** `POST /chat` (antes bloqueado por el 503) → **200** con el failover; SSE
     `sources`(~150 ms) → `notice`(~240 ms, 503 de `3.8-flash`) → `delta`(~4,1 s) → `done`(~4,9 s),
     653 chars.
+  - **Real — scoring (13/10):** con el bucket flash en **429 diario**, `POST /:id/analyze` →
+    **200 en 53,6 s** haciendo failover `3.8`/`3.5` (429) → `3.5-flash-lite` (504) →
+    **`3.1-flash-lite` OK**; CV puntuado (score 5, vector 768 d). Cierra el E2E de §1.1.
 
 ---
 

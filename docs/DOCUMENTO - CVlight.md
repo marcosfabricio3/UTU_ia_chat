@@ -77,16 +77,19 @@ Modelos configurados (en `backend/src/config.js`, ajustables por `.env`):
 
 | Uso | Variable | Cadena por defecto | Detalle |
 |---|---|---|---|
-| Scoring (batch) | `GEMINI_SCORING_MODELS` | `gemini-3.8-flash` → `3.5-flash` → `3.5-flash-lite` | Texto + lectura de PDF |
-| Chat (interactivo) | `GEMINI_CHAT_MODELS` | `GEMINI_CHAT_MODEL` + respaldos | Razonamiento `low` |
-| Autocompletar | `GEMINI_SUGGEST_MODELS` | `GEMINI_SUGGEST_MODEL` + respaldos | El más liviano/rápido |
+| Scoring (batch) | `GEMINI_SCORING_MODELS` | `gemini-3.8-flash` → `3.5-flash` → `3.5-flash-lite` → `3.1-flash-lite` | Texto + lectura de PDF |
+| Chat (interactivo) | `GEMINI_CHAT_MODELS` | `GEMINI_CHAT_MODEL` + respaldos (ídem scoring) | Razonamiento `low` |
+| Autocompletar | `GEMINI_SUGGEST_MODELS` | `GEMINI_SUGGEST_MODEL` + respaldos (ídem scoring) | El más liviano/rápido |
 | Embeddings (RAG) | `GEMINI_EMBED_MODEL` | `gemini-embedding-001` | Vectores de **768** dimensiones (`outputDimensionality`) |
 
 Cada tarea define una **cadena** de modelos (en orden de preferencia): si el primero está
 **saturado (503)**, con la **cuota diaria agotada (429)** o fue **retirado (404)**, se pasa al
-siguiente **sin cortar la consulta** (`401/403/400` son fatales). Un modelo que falla se
-**enfría** (pasa al final de la cadena) por un rato; en streaming, si el corte ocurre a mitad de
-la respuesta, el frontend vacía la burbuja y avisa. Detalle en `docs/PENDIENTES - CVlight.md` §2.11.
+siguiente **sin cortar la consulta** (`401/403/400` son fatales). La cadena combina **familias y
+buckets distintos** (los alias de una misma familia comparten cuota): `3.1-flash-lite` va al final
+porque su **bucket diario es independiente** del de la familia 3.5/3.6/3.8, de modo que la IA
+sigue respondiendo aun cuando el cupo "flash" se agotó. Un modelo que falla se **enfría** (pasa al
+final de la cadena) por un rato; en streaming, si el corte ocurre a mitad de la respuesta, el
+frontend vacía la burbuja y avisa. Detalle en `docs/PENDIENTES - CVlight.md` §2.11.
 
 > **Latencia.** Las tareas interactivas (Autocompletar y chat) usan un modelo más liviano y
 > `thinkingConfig.thinkingLevel: "low"`; el scoring prioriza calidad (`high`). Los pedidos
