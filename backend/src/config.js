@@ -38,7 +38,10 @@ const geminiModel = str(process.env.GEMINI_MODEL, "gemini-3.8-flash");
 
 // Respaldos por defecto (familias distintas: dos alias de la misma familia
 // comparten cuota y no suman cupo). El orden es de mejor a más liviano.
-const FALLBACKS = ["gemini-3.5-flash", "gemini-3.5-flash-lite"];
+// `gemini-3.5-flash`/`-lite` comparten el bucket diario de "3.6-flash"; el
+// `3.1-flash-lite` va último porque tiene su **propio bucket** (útil cuando la
+// familia 3.5/3.6 agotó su cuota diaria).
+const FALLBACKS = ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
 
 module.exports = {
   port: num(process.env.PORT, 3000),
