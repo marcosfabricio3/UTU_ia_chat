@@ -9,6 +9,7 @@ const chatService = require("../services/chat.service");
 const { generateResponse, friendlyAiError } = require("../services/gemini.service");
 const { SUGGEST_SYSTEM_INSTRUCTION, SUGGEST_SCHEMA } = require("../prompts/suggest.prompt");
 const { rateLimit } = require("../middleware/rate-limit");
+const { geminiSuggestModel, thinkingLevel, aiRetries } = require("../config");
 
 const router = express.Router();
 
@@ -73,6 +74,17 @@ function buildSuggestPrompt(titulo, requisitos) {
   ].join("\n");
 }
 
+// Historial de chat que manda el cliente: se acota (últimos 20 turnos, 4000
+// chars c/u). Lo comparten el chat normal y el de streaming.
+function parseHistory(raw) {
+  return (Array.isArray(raw) ? raw : [])
+    .slice(-20)
+    .map((h) => ({
+      role: h.role === "assistant" ? "assistant" : "user",
+      content: String(h.content || "").slice(0, 4000),
+    }));
+}
+
 // Crear vacante
 router.post("/", (req, res) => {
   const { titulo, descripcion, requisitos } = req.body;
@@ -104,6 +116,10 @@ router.post("/suggest", aiLimit, async (req, res) => {
     const text = await generateResponse(buildSuggestPrompt(titulo, requisitos), {
       systemInstruction: SUGGEST_SYSTEM_INSTRUCTION,
       responseSchema: SUGGEST_SCHEMA,
+      model: geminiSuggestModel,
+      thinkingLevel: thinkingLevel.suggest,
+      attempts: aiRetries.interactive,
+      label: "suggest",
     });
     const data = JSON.parse(text);
     res.json({
@@ -331,13 +347,7 @@ router.post("/:id/chat", aiLimit, loadJob, async (req, res) => {
     });
   }
 
-  // El historial lo manda el cliente: se acota (últimos 20 turnos, 4000 chars c/u).
-  const history = (Array.isArray(req.body.history) ? req.body.history : [])
-    .slice(-20)
-    .map((h) => ({
-      role: h.role === "assistant" ? "assistant" : "user",
-      content: String(h.content || "").slice(0, 4000),
-    }));
+  const history = parseHistory(req.body.history);
 
   try {
     const result = await chatService.chat(req.params.id, message, history);
@@ -348,6 +358,65 @@ router.post("/:id/chat", aiLimit, loadJob, async (req, res) => {
       success: false,
       message: friendlyAiError(error) || "No se pudo responder la pregunta.",
     });
+  }
+});
+
+// Chat RAG en streaming (Server-Sent Events): la respuesta se ve "escribiéndose".
+// Secuencia de eventos: `sources` (CVs citados) → muchos `delta` (fragmentos de
+// texto) → `done`. Ante un error a mitad de camino, un evento `error`.
+// La recuperación (embedding) se hace ANTES de abrir el stream: si falla, todavía
+// se puede responder un JSON con status HTTP normal.
+router.post("/:id/chat/stream", aiLimit, loadJob, async (req, res) => {
+  const { message } = req.body;
+
+  if (!message || !message.trim()) {
+    return res.status(400).json({ success: false, message: "El mensaje no puede estar vacío." });
+  }
+
+  const hayAnalizados = req.job.cvs.some((c) => Array.isArray(c.vector));
+  if (!hayAnalizados) {
+    return res.status(400).json({
+      success: false,
+      message: "Primero tenés que analizar los CVs (POST /analyze).",
+    });
+  }
+
+  const history = parseHistory(req.body.history);
+
+  let prepared;
+  try {
+    prepared = await chatService.prepare(req.params.id, message, history);
+  } catch (error) {
+    console.error("Error al recuperar el contexto del chat:", error.message);
+    return res.status(502).json({
+      success: false,
+      message: friendlyAiError(error) || "No se pudo responder la pregunta.",
+    });
+  }
+
+  if (!prepared) {
+    return res.status(404).json({ success: false, message: "La vacante ya no existe." });
+  }
+
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no"); // desactiva el buffer de proxies intermedios
+  if (typeof res.flushHeaders === "function") res.flushHeaders();
+
+  const send = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+
+  send("sources", prepared.fuentes);
+  try {
+    for await (const delta of chatService.chatStream(prepared)) {
+      send("delta", delta);
+    }
+    send("done", { ok: true });
+  } catch (error) {
+    console.error("Error en chat (stream):", error.message);
+    send("error", { message: friendlyAiError(error) || "No se pudo responder la pregunta." });
+  } finally {
+    res.end();
   }
 });
 

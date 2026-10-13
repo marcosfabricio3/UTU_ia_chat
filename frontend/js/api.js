@@ -12,30 +12,125 @@ window.CV = window.CV || {};
   const sameOrigin = location.hostname === "localhost" && location.port === "3000";
   const API_BASE = sameOrigin ? "/api" : "http://localhost:3000/api";
 
+  // Corta las esperas: si la IA no responde en este tiempo, avisamos en vez de
+  // dejar la UI "cargando" para siempre. 0 desactiva el corte.
+  const DEFAULT_TIMEOUT_MS = 120000;
+  const OFFLINE_MSG =
+    "No se pudo conectar con el servidor. ¿Está corriendo el backend en http://localhost:3000?";
+  const TIMEOUT_MSG = "La IA tardó demasiado en responder. Probá de nuevo.";
+
   async function request(path, options) {
+    const opts = options || {};
+    const timeoutMs = opts.timeoutMs === undefined ? DEFAULT_TIMEOUT_MS : opts.timeoutMs;
+    const fetchOpts = { ...opts };
+    delete fetchOpts.timeoutMs;
+
     let res;
     try {
-      res = await fetch(API_BASE + path, options);
-    } catch (err) {
-      throw new Error(
-        "No se pudo conectar con el servidor. ¿Está corriendo el backend en http://localhost:3000?"
-      );
+      const controller = new AbortController();
+      const timer = timeoutMs ? setTimeout(() => controller.abort(), timeoutMs) : null;
+      try {
+        res = await fetch(API_BASE + path, { ...fetchOpts, signal: controller.signal });
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    } catch (error) {
+      if (error && error.name === "AbortError") throw new Error(TIMEOUT_MSG);
+      throw new Error(OFFLINE_MSG);
     }
 
-    let data = null;
-    try {
-      data = await res.json();
-    } catch (err) {
-      /* respuesta sin JSON */
-    }
+    const data = await res.json().catch(() => null);
 
     if (!res.ok || (data && data.success === false)) {
       const err = new Error((data && data.message) || "Error " + res.status + " del servidor.");
-      err.status = res.status; // permite distinguir 404 ("ya no existe") de un fallo real
-      err.data = data; // payload completo (p. ej. la lista "failed") para quien lo necesite
+      err.status = res.status;
+      err.data = data;
       throw err;
     }
     return data;
+  }
+
+  // ---- Server-Sent Events (chat en streaming) ----
+  // Parsear un bloque SSE ("event: x\ndata: {...}") a { event, data }.
+  function parseSseBlock(bloque) {
+    let event = "message";
+    let data = "";
+    for (const linea of bloque.split("\n")) {
+      if (linea.startsWith("event:")) event = linea.slice(6).trim();
+      else if (linea.startsWith("data:")) data += linea.slice(5).trim();
+    }
+    if (!data) return null;
+    try {
+      return { event, data: JSON.parse(data) };
+    } catch (e) {
+      return { event, data };
+    }
+  }
+
+  // Chat en streaming: llama a `onDelta(fragmento)` a medida que llega el texto
+  // y resuelve con { fuentes } al terminar. Usa fetch + ReadableStream (no
+  // EventSource, porque necesitamos POST con body).
+  async function chatStream(id, message, history, handlers = {}) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+    let res;
+
+    try {
+      res = await fetch(API_BASE + "/jobs/" + encodeURIComponent(id) + "/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+        body: JSON.stringify({ message, history }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      clearTimeout(timer);
+      if (error && error.name === "AbortError") throw new Error(TIMEOUT_MSG);
+      throw new Error(OFFLINE_MSG);
+    }
+
+    if (!res.ok) {
+      clearTimeout(timer);
+      const data = await res.json().catch(() => null);
+      const err = new Error((data && data.message) || "Error " + res.status + " del servidor.");
+      err.status = res.status;
+      err.data = data;
+      throw err;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let fuentes = [];
+
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let idx;
+        while ((idx = buffer.indexOf("\n\n")) !== -1) {
+          const bloque = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 2);
+
+          const evt = parseSseBlock(bloque);
+          if (!evt) continue;
+
+          if (evt.event === "sources") {
+            fuentes = evt.data || [];
+            if (handlers.onSources) handlers.onSources(fuentes);
+          } else if (evt.event === "delta") {
+            if (handlers.onDelta) handlers.onDelta(String(evt.data || ""));
+          } else if (evt.event === "error") {
+            throw new Error((evt.data && evt.data.message) || "No se pudo responder la pregunta.");
+          }
+        }
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+
+    return { fuentes };
   }
 
   CV.api = {
@@ -51,11 +146,13 @@ window.CV = window.CV || {};
       for (const f of files) fd.append("cvs", f);
       return request("/jobs/" + encodeURIComponent(id) + "/cvs", { method: "POST", body: fd });
     },
+    // El análisis manda los PDFs a la IA y puede tardar bastante.
     analyze: (id, force) =>
       request("/jobs/" + encodeURIComponent(id) + "/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ force: !!force }),
+        timeoutMs: 600000,
       }),
     // "Autocompletar": la IA redacta requisitos/descripción a partir del título.
     suggestJob: (payload) =>
@@ -83,5 +180,6 @@ window.CV = window.CV || {};
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message, history }),
       }),
+    chatStream,
   };
 })(window.CV);

@@ -267,6 +267,11 @@ CV.views = CV.views || {};
     btn.disabled = true;
     setStatus(st, "loading", "Generando el borrador con la IA…");
 
+    // Si tarda más de lo normal, avisamos (el corte real lo hace el timeout de api.js).
+    const slowTimer = setTimeout(() => {
+      if (suggesting) setStatus(st, "loading", "La IA está tardando más de lo normal…");
+    }, 8000);
+
     try {
       const data = await api.suggestJob({ titulo, requisitos });
       const hechoReq = requisitos
@@ -283,6 +288,7 @@ CV.views = CV.views || {};
     } catch (err) {
       setStatus(st, "error", err.message);
     } finally {
+      clearTimeout(slowTimer);
       suggesting = false;
       btn.disabled = false;
     }

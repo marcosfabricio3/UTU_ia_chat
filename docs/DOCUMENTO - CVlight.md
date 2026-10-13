@@ -73,12 +73,19 @@ Se utilizó la **API de Google Gemini** mediante el SDK oficial **`@google/genai
 - **Embeddings** en el mismo proveedor, lo que simplifica el RAG.
 - **Costo/latencia** adecuados y disponibilidad de una capa gratuita para el desarrollo.
 
-Modelos configurados (en `backend/src/config.js`):
+Modelos configurados (en `backend/src/config.js`, ajustables por `.env`):
 
-| Uso | Modelo | Detalle |
-|---|---|---|
-| Generación (scoring y chat) | `gemini-3.8-flash` | Texto + lectura de PDF |
-| Embeddings (RAG) | `gemini-embedding-001` | Vectores de **768** dimensiones (`outputDimensionality`) |
+| Uso | Variable | Modelo por defecto | Detalle |
+|---|---|---|---|
+| Scoring (batch) | `GEMINI_MODEL` | `gemini-3.8-flash` | Texto + lectura de PDF |
+| Chat (interactivo) | `GEMINI_CHAT_MODEL` | `GEMINI_MODEL` | Razonamiento `low` |
+| Autocompletar | `GEMINI_SUGGEST_MODEL` | `gemini-3.5-flash-lite` | El más liviano/rápido |
+| Embeddings (RAG) | `GEMINI_EMBED_MODEL` | `gemini-embedding-001` | Vectores de **768** dimensiones (`outputDimensionality`) |
+
+> **Latencia.** Las tareas interactivas (Autocompletar y chat) usan un modelo más liviano y
+> `thinkingConfig.thinkingLevel: "low"`; el scoring prioriza calidad (`high`). Los pedidos
+> tienen **timeout** por intento y **reintentos** acotados, y el chat responde por **streaming (SSE)**.
+> El detalle está en `docs/PENDIENTES - CVlight.md` §2.10.
 
 ### 3.2 Integración 1 — Lectura de PDF directo
 El CV **no se convierte a texto con una librería**: se envía el archivo a Gemini como **datos en línea** (`inlineData` con `mimeType: application/pdf`). El modelo lo lee e interpreta directamente. Esto reduce dependencias y errores de extracción.

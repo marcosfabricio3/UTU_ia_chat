@@ -1,9 +1,20 @@
-const { generateResponse } = require("./gemini.service");
+const { generateResponse, generateResponseStream } = require("./gemini.service");
 const { retrieveRelevantCvs } = require("./retrieval.service");
 const { CHAT_SYSTEM_INSTRUCTION } = require("../prompts/chat.prompt");
 const store = require("./store.service");
+const { geminiChatModel, thinkingLevel, aiRetries } = require("../config");
 
-// Arma el bloque de contexto con los candidatos recuperados
+// Opciones de latencia del chat: modelo de chat, razonamiento bajo (es RAG: el
+// contexto ya está dado) y pocos reintentos porque el usuario está esperando.
+const CHAT_OPTS = {
+  systemInstruction: CHAT_SYSTEM_INSTRUCTION,
+  model: geminiChatModel,
+  thinkingLevel: thinkingLevel.chat,
+  attempts: aiRetries.interactive,
+  label: "chat",
+};
+
+// Arma el bloque de contexto con la vacante y los candidatos recuperados.
 function buildContext(job, matches) {
   const bloques = matches
     .map((m, i) => {
@@ -26,7 +37,20 @@ CANDIDATOS DISPONIBLES:
 ${bloques}`;
 }
 
-async function chat(jobId, question, history = []) {
+// Arma las fuentes citadas (los CVs recuperados) que devuelve el chat.
+function fuentesDe(matches) {
+  return matches.map((m) => ({
+    id: m.cv.id,
+    archivo: m.cv.archivo,
+    score: m.cv.score,
+    similitud: Math.round(m.similarity * 1000) / 1000,
+  }));
+}
+
+// Recupera los candidatos relevantes (1 llamada de embedding) y arma el prompt
+// completo. Se separa del chat para que la ruta SSE resuelva la recuperación
+// ANTES de abrir el stream. Devuelve null si la vacante no existe.
+async function prepare(jobId, question, history = []) {
   const job = store.getJob(jobId);
   if (!job) return null;
 
@@ -43,20 +67,22 @@ async function chat(jobId, question, history = []) {
 ${historial ? `HISTORIAL:\n${historial}\n` : ""}
 PREGUNTA DEL RECLUTADOR: ${question}`;
 
-  // 3. Generar la respuesta
-  const respuesta = await generateResponse(prompt, {
-    systemInstruction: CHAT_SYSTEM_INSTRUCTION,
-  });
-
-  // 4. Devolver fuentes citadas
-  const fuentes = matches.map((m) => ({
-    id: m.cv.id,
-    archivo: m.cv.archivo,
-    score: m.cv.score,
-    similitud: Math.round(m.similarity * 1000) / 1000,
-  }));
-
-  return { respuesta, fuentes };
+  return { prompt, fuentes: fuentesDe(matches) };
 }
 
-module.exports = { chat };
+// Chat sin streaming (fallback): espera la respuesta completa.
+async function chat(jobId, question, history = []) {
+  const prepared = await prepare(jobId, question, history);
+  if (!prepared) return null;
+
+  const respuesta = await generateResponse(prepared.prompt, CHAT_OPTS);
+
+  return { respuesta, fuentes: prepared.fuentes };
+}
+
+// Chat en streaming: cede los fragmentos de texto a medida que llegan.
+async function* chatStream(prepared) {
+  yield* generateResponseStream(prepared.prompt, CHAT_OPTS);
+}
+
+module.exports = { prepare, chat, chatStream };

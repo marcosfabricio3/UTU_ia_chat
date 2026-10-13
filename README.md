@@ -50,8 +50,13 @@ también se puede abrir con `file://` porque el backend tiene CORS abierto.)
 |---|---|---|
 | `GEMINI_API_KEY` | — (**obligatoria**) | Credencial de Gemini |
 | `PORT` | `3000` | Puerto del servidor |
-| `GEMINI_MODEL` | `gemini-3.8-flash` | Modelo de texto (scoring y chat) |
+| `GEMINI_MODEL` | `gemini-3.8-flash` | Modelo de texto del **scoring** (batch) |
+| `GEMINI_CHAT_MODEL` | `GEMINI_MODEL` | Modelo del **chat** (interactivo) |
+| `GEMINI_SUGGEST_MODEL` | `gemini-3.5-flash-lite` | Modelo de **Autocompletar** (liviano) |
 | `GEMINI_EMBED_MODEL` | `gemini-embedding-001` | Modelo de embeddings |
+| `GEMINI_THINKING_LEVEL_{SUGGEST,CHAT,SCORING}` | `low`, `low`, `high` | Razonamiento de Gemini 3 (`low` = más rápido) |
+| `AI_REQUEST_TIMEOUT_MS` | `120000` | Corte por intento contra la IA (ms) |
+| `GEMINI_RETRIES_{INTERACTIVE,BATCH}` | `2`, `3` | Reintentos ante 503/429 |
 
 ## Endpoints
 
@@ -68,11 +73,13 @@ también se puede abrir con `file://` porque el backend tiene CORS abierto.)
 | `POST` | `/api/jobs/:id/analyze` | Puntuar los CVs **pendientes** (los ya analizados se saltan; `{ force: true }` re-analiza todo) |
 | `GET` | `/api/jobs/:id/ranking` | Ranking ordenado + KPIs |
 | `POST` | `/api/jobs/:id/chat` | Chat RAG sobre los CVs de la vacante |
+| `POST` | `/api/jobs/:id/chat/stream` | Igual que el anterior, en **streaming (SSE)**: `sources` → `delta`* → `done` |
 | `POST` | `/api/chat` | Chat suelto (plantilla original, sin RAG) |
 | `GET` | `/api/chat/models` | Diagnóstico: lista los modelos en consola |
 
-`POST /api/jobs/suggest`, `POST /api/jobs/:id/analyze` y `POST /api/jobs/:id/chat`
-están limitados a **30 peticiones por minuto por IP** para no agotar la cuota de la IA.
+`POST /api/jobs/suggest`, `POST /api/jobs/:id/analyze`, `POST /api/jobs/:id/chat`
+y `POST /api/jobs/:id/chat/stream` están limitados a **30 peticiones por minuto por IP**
+para no agotar la cuota de la IA.
 
 ## Estructura
 

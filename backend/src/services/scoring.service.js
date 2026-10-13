@@ -1,6 +1,7 @@
 const { generateResponse, embedTexts, friendlyAiError } = require("./gemini.service");
 const { SYSTEM_INSTRUCTION, SCORE_SCHEMA } = require("../prompts/scoring.prompt");
 const store = require("./store.service");
+const { thinkingLevel, aiRetries } = require("../config");
 
 function buildVacancyText(job) {
   return `VACANTE: ${job.titulo}
@@ -16,6 +17,9 @@ async function scoreCv(job, cv) {
     systemInstruction: SYSTEM_INSTRUCTION,
     responseSchema: SCORE_SCHEMA,
     files: [{ path: cv.path, mimeType: "application/pdf" }],
+    thinkingLevel: thinkingLevel.scoring,
+    attempts: aiRetries.batch,
+    label: "scoring",
   });
   return JSON.parse(text);
 }
