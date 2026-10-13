@@ -13,7 +13,8 @@ CV.views = CV.views || {};
   let panelEl = null;
   let jobId = null;
   let loading = false;
-  let messages = []; // { role: 'user'|'bot', text, sources?, error? }
+  let streaming = false;
+  let messages = []; // { role: 'user'|'bot', text, sources?, error?, streaming? }
   let history = [];  // [{ role:'user'|'assistant', content }]
 
   const SUGGESTIONS = [
@@ -117,6 +118,26 @@ CV.views = CV.views || {};
         ? `<div class="msg bot"><span class="who">CVlight</span><span class="typing"><span class="spinner" aria-hidden="true"></span>Leyendo los CVs…</span></div>`
         : "");
 
+    // Mientras la respuesta se escribe, no anunciamos cada fragmento: el lector
+    // de pantalla espera a que termine (aria-busy) y lee la respuesta completa.
+    if (streaming) log.setAttribute("aria-busy", "true");
+    else log.removeAttribute("aria-busy");
+
+    log.scrollTop = log.scrollHeight;
+  }
+
+  // Actualiza solo la burbuja que se está escribiendo (sin re-renderizar todo
+  // el log en cada fragmento). El HTML final se aplica en el renderLog de cierre.
+  function updateStreamBubble(text) {
+    const log = panelEl.querySelector("#chat-log");
+    if (!log) return;
+    const bubbles = log.querySelectorAll(".msg.bot .bubble");
+    const bubble = bubbles[bubbles.length - 1];
+    if (!bubble) {
+      renderLog();
+      return;
+    }
+    bubble.textContent = text;
     log.scrollTop = log.scrollHeight;
   }
 
@@ -125,6 +146,10 @@ CV.views = CV.views || {};
       return `<div class="msg user"><span class="who">Vos</span><div class="bubble">${esc(m.text)}</div></div>`;
     }
     const names = (m.sources || []).map((s) => prettifyName(s.archivo));
+    // Respuesta en curso: texto plano + cursor. Al terminar se re-renderiza con Markdown y fuentes.
+    if (m.streaming) {
+      return `<div class="msg bot is-streaming"><span class="who">CVlight</span><div class="bubble">${esc(m.text)}</div></div>`;
+    }
     // Los errores se muestran como texto plano; las respuestas, con Markdown mínimo.
     const body = m.error ? esc(m.text) : richText(m.text, names);
     const sources = (m.sources || [])
@@ -142,7 +167,7 @@ CV.views = CV.views || {};
 
   async function onSubmit(e) {
     if (e && e.preventDefault) e.preventDefault();
-    if (loading) return;
+    if (loading || streaming) return;
 
     const input = panelEl.querySelector("#chat-input");
     const text = input.value.trim();
@@ -158,7 +183,6 @@ CV.views = CV.views || {};
     }
 
     messages.push({ role: "user", text });
-    history.push({ role: "user", content: text });
     input.value = "";
     loading = true;
 
@@ -167,18 +191,90 @@ CV.views = CV.views || {};
 
     renderLog();
 
+    // Sin soporte de streaming, mismo camino de siempre (espera completa).
+    if (typeof api.chatStream !== "function" || typeof TextDecoder === "undefined") {
+      await askOnce(text);
+      return;
+    }
+
+    await askStreaming(text);
+  }
+
+  // Camino clásico: una sola respuesta al final.
+  async function askOnce(text) {
     try {
       const data = await api.chat(jobId, text, history);
       messages.push({ role: "bot", text: data.respuesta || "(sin respuesta)", sources: data.fuentes || [] });
+      history.push({ role: "user", content: text });
       history.push({ role: "assistant", content: data.respuesta || "" });
     } catch (err) {
       messages.push({ role: "bot", text: err.message, error: true });
     } finally {
       loading = false;
       renderLog();
-      const i = panelEl.querySelector("#chat-input");
-      if (i) i.focus();
+      focusInput();
     }
+  }
+
+  // Camino con streaming: el texto aparece a medida que la IA lo genera.
+  async function askStreaming(text) {
+    const myJobId = jobId;
+    let bot = null;
+    let fuentes = [];
+
+    try {
+      const result = await api.chatStream(myJobId, text, history, {
+        onSources: (f) => {
+          fuentes = f || [];
+        },
+        onDelta: (chunk) => {
+          if (!chunk || jobId !== myJobId) return;
+          if (!bot) {
+            loading = false;
+            streaming = true;
+            bot = { role: "bot", text: "", sources: [], streaming: true };
+            messages.push(bot);
+            renderLog();
+          }
+          bot.text += chunk;
+          updateStreamBubble(bot.text);
+        },
+      });
+      if (result && result.fuentes) fuentes = result.fuentes;
+    } catch (error) {
+      if (!bot) {
+        loading = false;
+        streaming = false;
+        messages.push({ role: "bot", text: error.message || "No se pudo responder.", error: true });
+        renderLog();
+        focusInput();
+        return;
+      }
+      // Se cortó a mitad: dejamos lo que llegó y avisamos.
+      bot.text += (bot.text ? "\n\n" : "") + "⚠ " + (error.message || "Se cortó la respuesta.");
+    } finally {
+      loading = false;
+      streaming = false;
+    }
+
+    if (!bot) {
+      bot = { role: "bot", text: "", sources: [] };
+      messages.push(bot);
+    }
+    bot.streaming = false;
+    bot.sources = fuentes;
+    if (!bot.text) bot.text = "No tengo una respuesta para eso.";
+
+    history.push({ role: "user", content: text });
+    history.push({ role: "assistant", content: bot.text });
+
+    renderLog();
+    focusInput();
+  }
+
+  function focusInput() {
+    const i = panelEl.querySelector("#chat-input");
+    if (i) i.focus();
   }
 
   function emptyPanel(title, extra) {

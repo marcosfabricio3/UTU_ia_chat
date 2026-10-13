@@ -880,6 +880,17 @@ html.kb .theme-switch:focus-within { outline: 2px solid var(--salmon-ink); outli
   padding: 10px 18px;
 }
 
+/* Respuesta en streaming: cursor parpadeante al final del texto que se escribe. */
+.msg.bot.is-streaming .bubble::after {
+  content: "▍";
+  margin-left: 2px;
+  animation: blink 1s steps(1) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .msg.bot.is-streaming .bubble::after { animation: none; }
+}
+
 .typing { display: inline-flex; gap: 6px; align-items: center; color: var(--ink-3); font-size: .85rem; font-family: var(--font-mono); }
 
 /* ---------------- Movimiento (entrada del ranking) ---------------- */

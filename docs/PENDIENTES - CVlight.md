@@ -1,33 +1,28 @@
 # PENDIENTES — CVlight
 
-**Actualizado:** lunes 12/10/2026
-**Contexto:** verificación de los arreglos de la auditoría (skip-link + foco, render de
-Markdown en el chat, validación de PDF en cliente, guard de doble envío, tolerancia a
-fallos por CV y mensajes de error accionables).
+**Actualizado:** martes 13/10/2026
+**Contexto:** latencia de la IA (modelo liviano para Autocompletar, nivel de razonamiento
+"low" en las tareas interactivas, reintentos/timeout y streaming del chat).
 
 ---
 
-## 1. Bloqueado por cuota de la IA — esperar el reset de HOY ~17:00 (GMT-3)
+## 1. Estado de la IA (cuota / saturación) — al 13/10
 
-El *free tier* de Gemini agotó su cuota diaria en **todos** los modelos flash:
+La **cuota diaria** (429) se resetea. Lo que sigue es **saturación transitoria** (503) del
+modelo principal `gemini-3.8-flash`: la API responde
+*"This model is currently experiencing high demand…"*. Medición del **13/10**:
 
-| Modelo pedido | Se contabiliza como | Estado (últ. medición ~19:25) |
+| Modelo | Estado | Latencia típica |
 |---|---|---|
-| `gemini-3.8-flash` | `gemini-3.8-flash` | 429 — reset ~21h45m |
-| `gemini-3.5-flash` | `gemini-3.6-flash` (alias) | 429 — reset ~21h45m |
-| `gemini-3.6-flash` | `gemini-3.6-flash` | 429 — reset ~21h45m |
+| `gemini-3.8-flash` (principal) | **503** intermitente | — (falla) |
+| `gemini-3.5-flash` | OK | ~3 s |
+| `gemini-3.5-flash-lite` (Autocompletar) | OK | ~16–30 s |
+| `gemini-embedding-001` | OK (cuota aparte) | ~0,4 s |
 
-> Los **embeddings** (`gemini-embedding-001`) tienen cuota aparte y **sí** funcionan.
+> Si `gemini-3.8-flash` sigue saturado para la demo: `GEMINI_MODEL=gemini-3.5-flash` en
+> `backend/.env` (afecta chat y scoring). Es una variable de entorno, no hace falta tocar código.
 
-**Reintentar después de las ~17:00 (GMT-3) de hoy.** Primero verificar el cupo con **una
-sola** llamada de diagnóstico:
-
-```powershell
-# ejecutar dentro de backend/
-node -e "const fs=require('fs');const key=(fs.readFileSync('.env','utf8').match(/GEMINI_API_KEY=(.*)/)||[])[1].trim();(async()=>{const {GoogleGenAI}=await import('@google/genai');const ai=new GoogleGenAI({apiKey:key});try{await ai.models.generateContent({model:'gemini-3.8-flash',contents:'ping'});console.log('OK: hay cuota')}catch(e){const m=e.message||'';console.log('FAIL status='+e.status+' retry='+((m.match(/retry in ([0-9hms.]+)/)||[])[1]||''))}})()"
-```
-
-### 1.1 Checklist a completar cuando haya cuota
+### 1.1 Checklist a completar cuando el modelo principal responda
 
 - [ ] **Análisis real con éxito (E2E).**
   - Sobre la vacante ya cargada (o una nueva), subir los 5 PDFs de `sample-cvs/` y
@@ -262,6 +257,45 @@ $env:GEMINI_MODEL="gemini-3.5-flash"; node src/app.js
   input) y centra el ícono con `inline-flex`.
 - **Verificado (navegador).** Botón 93×54 px (relación ~1.7:1, rectangular), 1 SVG `icon-send-horizontal`
   de 20 px, `aria-label="Enviar"`, alto igual al input y consola limpia. **Ok.**
+
+### 2.10 Latencia de la IA (menos espera en Autocompletar, chat y análisis)
+- **Síntoma.** "Autocompletar" tardaba ~93 s y el chat/análisis también se sentían lentos.
+- **Causa principal.** Todos los pedidos iban al mismo modelo (`gemini-3.8-flash`) **sin**
+  controlar el razonamiento ("thinking"): la IA "pensaba" de más antes de responder. A esto se
+  sumaban: reintentos de 3 intentos incluso en las acciones interactivas, sin **timeout** de
+  red, y el chat esperando la respuesta completa (sin streaming).
+- **Causa de fondo (entorno).** El modelo `gemini-3.8-flash` del free tier está **saturado**
+  (503) de forma intermitente; por eso algunas mediciones eran peores.
+- **Cambios.**
+  - **Modelo por tarea** (`config.js`): `GEMINI_SUGGEST_MODEL` (Autocompletar, se usa
+    `gemini-3.5-flash-lite`), `GEMINI_CHAT_MODEL` (chat) y `GEMINI_MODEL` (scoring, el
+    principal). Todos con default = `GEMINI_MODEL`.
+  - **Nivel de razonamiento** (`thinkingConfig.thinkingLevel`, Gemini 3): `low` para
+    Autocompletar y chat, `high` para el scoring. Configurable por
+    `GEMINI_THINKING_LEVEL_{SUGGEST,CHAT,SCORING}` (vacío = default del modelo).
+    *(Nota: en Gemini 3 el ajuste correcto es `thinkingLevel`; `thinkingBudget: 0` —lo que
+    sugería la versión vieja de la doc— devuelve `400 INVALID_ARGUMENT` en estos modelos.)*
+  - **Reintentos y timeout** (`gemini.service.js`): `withRetry` con `attempts` por tarea
+    (`GEMINI_RETRIES_INTERACTIVE=2` en Autocompletar/chat, `GEMINI_RETRIES_BATCH=3` en
+    scoring) y **timeout por intento** (`AI_REQUEST_TIMEOUT_MS`, default 120 s) a nivel de
+    cliente. En el frontend, `api.js` corta cada `fetch` con `AbortController` (120 s; 10 min
+    en el análisis) y traduce el corte a un mensaje claro.
+  - **Streaming en el chat** (SSE): `POST /api/jobs/:id/chat/stream` manda `sources` → muchos
+    `delta` → `done` (o `error`). `chat.service.prepare()` hace la recuperación (embedding)
+    **antes** de abrir el stream. El frontend (`chat.js`) escribe la respuesta a medida que
+    llega, con cursor parpadeante y **`aria-busy`** para no anunciar cada fragmento al lector
+    de pantalla. El endpoint **no** se cambió: `/chat` sigue existiendo como fallback.
+  - **Logs de latencia** (`gemini.service.js`): cada llamada registra
+    `[ai:<tarea>] ok en <ms> pensados=<n> entrada=<n> salida=<n>` (usa `usageMetadata`); los
+    reintentos y errores quedan en consola. No cuestan cuota → medir siempre con esto.
+- **Verificado.**
+  - **Sin cuota:** sintaxis (`node --check`) de backend y frontend; SSE OK de punta a punta
+    (evento `sources` a los ~450 ms y `error` cuando el modelo estaba en 503).
+  - **Real:** `/suggest` → **200 en ~30 s** (antes ~93 s) con `gemini-3.5-flash-lite` +
+    `thinkingLevel: low`. Sondeo de modelos: `gemini-3.5-flash` respondió en **~3 s**,
+    `gemini-3.8-flash` devolvía **503** en ese momento.
+- **Pendiente / a decidir.** Si el modelo principal (`gemini-3.8-flash`) sigue saturado, poner
+  en `.env` `GEMINI_MODEL=gemini-3.5-flash` (afecta al chat y al scoring) para la demo.
 
 ---
 
