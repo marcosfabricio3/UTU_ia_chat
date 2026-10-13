@@ -1,4 +1,4 @@
-const { generateResponse, generateResponseStream } = require("./gemini.service");
+const { generateResponse, generateResponseStream } = require("./ai.service");
 const { retrieveRelevantCvs } = require("./retrieval.service");
 const { CHAT_SYSTEM_INSTRUCTION } = require("../prompts/chat.prompt");
 const store = require("./store.service");

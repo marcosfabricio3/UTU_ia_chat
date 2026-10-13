@@ -1,4 +1,4 @@
-const { embedTexts } = require("./gemini.service");
+const { embedTexts } = require("./ai.service");
 
 // Similitud coseno entre dos vectores. Devuelve 0 si alguno es inválido o si
 // no tienen la misma dimensión (evita NaN por comparar vectores de distinto tamaño).

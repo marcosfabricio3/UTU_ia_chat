@@ -21,17 +21,24 @@ function list(value) {
   return out;
 }
 
+// Una entrada de cadena es "modelo" (proveedor por defecto: Gemini) o
+// "proveedor:modelo" (p. ej. `groq:openai/gpt-oss-120b`). Se separa por el
+// PRIMER ":" para permitir modelos con ":" (p. ej. OpenRouter `:free`).
+function parseEntry(entry) {
+  const raw = String(entry || "").trim();
+  const idx = raw.indexOf(":");
+  if (idx > 0) return { provider: raw.slice(0, idx), model: raw.slice(idx + 1) };
+  return { provider: "gemini", model: raw };
+}
+
 // Cadena de modelos de una tarea: si hay lista explícita se respeta tal cual; si
 // no, se arma con el modelo de la tarea seguido de los respaldos comunes.
 function chain(envLista, head, fallbacks) {
   const explicita = list(envLista);
-  if (explicita.length) return explicita;
-
-  const out = [];
-  for (const nombre of [head, ...fallbacks]) {
-    if (nombre && !out.includes(nombre)) out.push(nombre);
-  }
-  return out;
+  const nombres = [];
+  if (explicita.length) nombres.push(...explicita);
+  else for (const nombre of [head, ...fallbacks]) if (nombre && !nombres.includes(nombre)) nombres.push(nombre);
+  return nombres.map(parseEntry);
 }
 
 const geminiModel = str(process.env.GEMINI_MODEL, "gemini-3.8-flash");
@@ -50,24 +57,49 @@ module.exports = {
   geminiEmbedModel: str(process.env.GEMINI_EMBED_MODEL, "gemini-embedding-001"),
   embedDimensions: num(process.env.EMBED_DIMENSIONS, 768),
 
-  // Cadenas de modelos por tarea (el orden es la preferencia). Ante saturación
-  // (503), cuota diaria agotada (429) o modelo retirado (404), se pasa al
-  // siguiente sin cortar la consulta. El primer modelo siempre se intenta.
+  // Cadenas de modelos por tarea (el orden es la preferencia). Cada entrada es
+  // "modelo" (Gemini) o "proveedor:modelo". Ante saturación (503), cuota diaria
+  // agotada (429) o modelo retirado (404), se pasa al siguiente sin cortar la
+  // consulta. Además, si el pedido lleva un PDF adjunto, se omiten los motores
+  // que no leen PDF (p. ej. Groq): eso lo resuelve el orquestador.
   modelChains: {
+    // Sugerencias y chat: interactivos y de mucho volumen → conviene empezar por
+    // Groq (cuota diaria mucho más amplia) y dejar Gemini como respaldo.
     suggest: chain(
-      process.env.GEMINI_SUGGEST_MODELS,
-      str(process.env.GEMINI_SUGGEST_MODEL, geminiModel),
+      process.env.AI_SUGGEST_MODELS || process.env.GEMINI_SUGGEST_MODELS,
+      str(process.env.AI_SUGGEST_MODEL || process.env.GEMINI_SUGGEST_MODEL, geminiModel),
       FALLBACKS
     ),
     chat: chain(
-      process.env.GEMINI_CHAT_MODELS,
-      str(process.env.GEMINI_CHAT_MODEL, geminiModel),
+      process.env.AI_CHAT_MODELS || process.env.GEMINI_CHAT_MODELS,
+      str(process.env.AI_CHAT_MODEL || process.env.GEMINI_CHAT_MODEL, geminiModel),
       FALLBACKS
     ),
-    // El scoring manda el PDF y espera JSON: todos los de la cadena deben
-    // soportar lectura de PDF + respuesta estructurada.
-    scoring: chain(process.env.GEMINI_SCORING_MODELS, geminiModel, FALLBACKS),
+    // El scoring prioriza calidad y puede leer PDF: Gemini primero.
+    scoring: chain(
+      process.env.AI_SCORING_MODELS || process.env.GEMINI_SCORING_MODELS,
+      geminiModel,
+      FALLBACKS
+    ),
   },
+
+  // Motores disponibles. `baseUrl` es la API compatible con OpenAI.
+  providers: {
+    gemini: { apiKey: process.env.GEMINI_API_KEY },
+    groq: {
+      apiKey: process.env.GROQ_API_KEY,
+      baseUrl: str(process.env.GROQ_BASE_URL, "https://api.groq.com/openai/v1"),
+    },
+    openrouter: {
+      apiKey: process.env.OPENROUTER_API_KEY,
+      baseUrl: str(process.env.OPENROUTER_BASE_URL, "https://openrouter.ai/api/v1"),
+    },
+  },
+
+  // Cómo procesar cada CV: "auto" extrae el texto y, si no hay capa de texto
+  // (escaneado) o el resultado es pobre, manda el PDF nativo; "pdf" siempre
+  // manda el PDF (comportamiento previo, sin extracción).
+  pdfMode: str(process.env.AI_PDF_MODE, "auto"),
 
   // Nivel de razonamiento ("thinking") de los modelos Gemini 3: "low" responde
   // más rápido y "high" razona más profundo. Vacío/"" = no se envía el ajuste y

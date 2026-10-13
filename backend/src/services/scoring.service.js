@@ -1,27 +1,64 @@
-const { generateResponse, embedTexts, friendlyAiError } = require("./gemini.service");
-const { SYSTEM_INSTRUCTION, SCORE_SCHEMA } = require("../prompts/scoring.prompt");
+const { generateResponse, embedTexts, friendlyAiError } = require("./ai.service");
+const { SYSTEM_INSTRUCTION, buildScoreSchema } = require("../prompts/scoring.prompt");
+const { extractPdf } = require("./pdfText");
 const store = require("./store.service");
-const { modelChains, thinkingLevel } = require("../config");
+const { modelChains, thinkingLevel, pdfMode } = require("../config");
 
 function buildVacancyText(job) {
   return `VACANTE: ${job.titulo}
 DESCRIPCIÓN: ${job.descripcion}
-REQUISITOS: ${job.requisitos || "no especificados"}
+REQUISITOS: ${job.requisitos || "no especificados"}`;
+}
+
+// Pedido cuando el texto del CV lo extraemos localmente (motores de texto).
+function buildTextMessage(job, cvText) {
+  return `${buildVacancyText(job)}
+
+CV (texto extraído del PDF):
+"""
+${cvText}
+"""
+
+Evaluá el CV contra esta vacante y devolvé el JSON pedido.`;
+}
+
+// Pedido cuando se manda el PDF nativo (escaneado o sin extracción fiable).
+function buildPdfMessage(job) {
+  return `${buildVacancyText(job)}
 
 Evaluá el CV adjunto contra esta vacante y devolvé el JSON pedido.`;
 }
 
-// Puntúa un CV contra la vacante (manda el PDF directo a Gemini).
+// Los motores a veces envuelven el JSON en cercos de markdown.
+function parseJsonResponse(text) {
+  let s = String(text || "").trim();
+  const fence = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(s);
+  if (fence) s = fence[1].trim();
+  return JSON.parse(s);
+}
+
+// Puntúa un CV contra la vacante.
+//
+// Primero extrae el texto localmente (con reordenamiento de columnas): si hay
+// capa de texto utilizable, el CV se manda como texto a cualquier motor (incluido
+// Groq) y `texto_extraido` lo ponemos nosotros. Si no (escaneado), se manda el PDF
+// nativo y el motor con visión (Gemini) devuelve el texto.
 async function scoreCv(job, cv) {
-  const text = await generateResponse(buildVacancyText(job), {
+  const extracted = await extractPdf(cv.path, { mode: pdfMode });
+  const usingPdf = extracted.payload === "pdf";
+
+  const text = await generateResponse(usingPdf ? buildPdfMessage(job) : buildTextMessage(job, extracted.text), {
     systemInstruction: SYSTEM_INSTRUCTION,
-    responseSchema: SCORE_SCHEMA,
-    files: [{ path: cv.path, mimeType: "application/pdf" }],
+    responseSchema: buildScoreSchema({ withExtractedText: usingPdf }),
+    files: usingPdf ? [{ path: cv.path, mimeType: "application/pdf" }] : undefined,
     thinkingLevel: thinkingLevel.scoring,
     models: modelChains.scoring,
     label: "scoring",
   });
-  return JSON.parse(text);
+
+  const data = parseJsonResponse(text);
+  if (!usingPdf) data.texto_extraido = extracted.text;
+  return data;
 }
 
 // Analiza los CVs de una vacante.

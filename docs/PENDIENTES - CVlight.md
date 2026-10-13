@@ -2,8 +2,10 @@
 
 **Actualizado:** martes 13/10/2026
 **Contexto:** latencia de la IA (modelo liviano para Autocompletar, nivel de razonamiento
-"low" en las tareas interactivas, reintentos/timeout y streaming del chat) y **failover
-automático de modelos** (si uno está saturado, se usa otro sin cortar la consulta — §2.11).
+"low" en las tareas interactivas, reintentos/timeout y streaming del chat), **failover
+automático de motores** (si uno está saturado, se usa otro sin cortar la consulta — §2.11)
+y **segundo motor (Groq) + extracción local del texto del PDF** (con reordenamiento de
+columnas — §2.12).
 
 ---
 
@@ -317,13 +319,14 @@ $env:GEMINI_MODEL="gemini-3.5-flash"; node src/app.js
 - **Motivación.** `gemini-3.8-flash` (el principal) responde **503** de forma intermitente. Antes,
   eso cortaba la consulta. Ahora, si un modelo falla, se **prueba automáticamente con el siguiente**
   y el usuario no ve el error: la respuesta sale igual (con otro modelo).
-- **Clasificación del error** (`classifyAiError`, `gemini.service.js`):
+- **Clasificación del error** (`classifyAiError`, `services/aiErrors.js`):
   - `retry-same` — **429 por minuto**: se espera y se reintenta el **mismo** modelo.
   - `next-model` — **503** (saturado), **429 por día** (cuota diaria), **404** (modelo retirado),
     cortes de red y **cualquier error sin código**. Pasa al siguiente modelo.
   - `fatal` — **400/401/403/422**: no se reintenta (se informa el error).
-- **Cadena por tarea** (`config.js`): `GEMINI_{SUGGEST,CHAT,SCORING}_MODELS` (lista separada por
-  comas, en orden de preferencia). Por defecto: el modelo de la tarea + `gemini-3.5-flash` +
+- **Cadena por tarea** (`config.js`): `AI_{SUGGEST,CHAT,SCORING}_MODELS` (lista separada por
+  comas, en orden de preferencia; los nombres viejos `GEMINI_*_MODELS` siguen leyéndose). Por
+  defecto: el modelo de la tarea + `gemini-3.5-flash` +
   `gemini-3.5-flash-lite` + `gemini-3.1-flash-lite`. **Ojo:** dos alias de la misma familia comparten
   cuota, por eso la cadena usa **familias y buckets distintos** — `3.1-flash-lite` va **último
   justamente porque su bucket es independiente** del de la familia 3.5/3.6/3.8, así que sobrevive
@@ -352,6 +355,41 @@ $env:GEMINI_MODEL="gemini-3.5-flash"; node src/app.js
   - **Real — scoring (13/10):** con el bucket flash en **429 diario**, `POST /:id/analyze` →
     **200 en 53,6 s** haciendo failover `3.8`/`3.5` (429) → `3.5-flash-lite` (504) →
     **`3.1-flash-lite` OK**; CV puntuado (score 5, vector 768 d). Cierra el E2E de §1.1.
+
+### 2.12 Segundo motor (Groq) + extracción local del texto del PDF — HECHO
+- **Motivación.** La cuota gratuita de Gemini es chica (**~20 req/día por bucket de familia**); una
+  demo con muchos CVs / muchas preguntas la agota rápido. Se agregó un **segundo motor, Groq**
+  (API compatible con OpenAI), con **1.000 req/día** para las tareas de texto.
+- **División de tareas.**
+  - **Groq recibe texto** (NO lee PDF). Para poder usarlo, el backend **extrae el texto del PDF
+    localmente** (`services/pdfText.js`, con `pdfjs-dist`) y se lo manda.
+  - **Gemini** sigue siendo el único con **visión**: lee el **PDF nativo** (CVs escaneados o cuyo
+    layout no se pudo extraer) y genera los **embeddings** (`gemini-embedding-001`, 768 d; sin
+    failover de modelo, solo backoff).
+- **Cadenas con proveedor** (`config.js`): cada entrada es `modelo` (Gemini) o `proveedor:modelo`
+  (p. ej. `groq:openai/gpt-oss-120b`). El orquestador (`services/ai.service.js`) **filtra por
+  capacidad**: si el pedido lleva un PDF adjunto, los motores que no leen PDF **se saltean**;
+  si no, alcanza con texto. Orden por tarea (ver §1 de `DOCUMENTO - CVlight.md` §3.1):
+  - Chat y Autocompletar → **Groq primero** (volumen), Gemini de respaldo.
+  - Scoring → **Gemini primero** (calidad + visión), Groq al final (solo texto).
+- **Extracción con detección de columnas (`pdfText.js`).** Usa la **posición** (x, y) de cada
+  fragmento (`pdfjs`). Si en muchas líneas el centro de la página queda sin cubrir por una banda
+  **angosta** (un "pasillo" real), son **dos columnas** y se emite **izquierda completa y después
+  derecha** (en vez de entreverar). Un hueco **enorme** (títulos con fechas a la derecha) **no** se
+  confunde con columnas. El texto extraído se **rankearía/vectoriza igual** (embedding → RAG).
+- **Decisión de payload** por CV:
+  - `payload="text"` → se manda el texto extraído a cualquier motor; `texto_extraido` lo **pone el
+    backend** y se **quita del `responseSchema`** (ahorra tokens).
+  - `payload="pdf"` → PDF nativo a **solo Gemini**; el texto lo devuelve el modelo en `texto_extraido`.
+  - Regla: si el texto extraído es pobre (p. ej. **menos de 150 chars** → escaneado/vacío) o el PDF no
+    se pudo leer → `payload="pdf"`. `AI_PDF_MODE=auto` (default) o `pdf` (siempre nativo).
+- **Límite duro:** CV **escaneado + Gemini sin cuota** = no hay con quién leerlo; la UI avisa
+  *"Este CV es escaneado (o su layout no se pudo leer como texto) y necesita el motor con visión,
+  que ahora no está disponible."* y queda pendiente para reintentar.
+- **Verificado.** 13 tests `node:test` (`cd backend && npm test`): reordenamiento de columnas,
+  no-falso-positivo de fechas, escaneado→`pdf`, failover 503/401/429(min/día), **salteo de motores
+  sin visión**, y streaming con `restart`/`notice`. Falta el **smoke real contra Groq** (requiere
+  `GROQ_API_KEY`).
 
 ---
 

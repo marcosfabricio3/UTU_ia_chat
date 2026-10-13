@@ -1,5 +1,5 @@
 const express = require("express");
-const { generateResponse, listModels } = require("../services/gemini.service");
+const { generateResponse, listModels } = require("../services/ai.service");
 const { rateLimit } = require("../middleware/rate-limit");
 
 const router = express.Router();
