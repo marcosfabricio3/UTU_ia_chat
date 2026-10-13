@@ -10,7 +10,7 @@ const {
 } = require("../config");
 const { getProvider } = require("./providers");
 const geminiProvider = require("./providers/gemini");
-const { statusOf, classifyAiError, isRetriableAiError } = require("./aiErrors");
+const { statusOf, classifyAiError, isRetriableAiError, isConnectionError } = require("./aiErrors");
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -302,9 +302,9 @@ async function embedTexts(texts) {
     const response = await withRetry(
       () =>
         ai.models.embedContent({
-          model: geminiProvider.embedModel,
+          model: geminiEmbedModel,
           contents: texts,
-          config: { outputDimensionality: geminiProvider.embedDimensions },
+          config: { outputDimensionality: embedDimensions },
         }),
       { attempts: aiRetries.batch, baseDelayMs: 1000, label: "embed" }
     );
@@ -335,6 +335,9 @@ function friendlyAiError(error) {
   if (status === 504) return "La IA tardó demasiado en responder. Probá de nuevo.";
   if (status === 401 || status === 403) {
     return "La credencial de la IA no es válida o no tiene permisos.";
+  }
+  if (isConnectionError(error)) {
+    return "No se pudo conectar con la IA (posible corte de red). Probá de nuevo.";
   }
   return null;
 }

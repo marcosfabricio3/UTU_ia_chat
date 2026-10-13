@@ -336,6 +336,7 @@ intercepta `fetch`):
 | Pedido con PDF y cadena de solo texto | ✅ **Saltea** el motor sin visión |
 | Streaming que falla a mitad | ✅ Emite `restart` (vaciar burbuja) y sigue |
 | Caída de conexión (sin HTTP, p. ej. proxy TLS) | ✅ **Reintenta el mismo motor** (no salta de proveedor) |
+| Embedding del chat | ✅ `embedTexts` usa el modelo de `config` (nunca `undefined`) |
 
 ---
 

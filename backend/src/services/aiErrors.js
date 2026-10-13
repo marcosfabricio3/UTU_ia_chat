@@ -38,10 +38,11 @@ function retryDelaySeconds(error) {
 // saltar por un problema de red local gastaría la cuota del motor de respaldo.
 function isConnectionError(error) {
   if (statusOf(error)) return false;
-  if (error && error.name === "TypeError") return true; // undici: "fetch failed"
   const cause = (error && error.cause && error.cause.code) || "";
   const msg = String((error && error.message) || "");
-  return /fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|SELF_SIGNED_CERT|UNABLE_TO_VERIFY|CERT_|socket hang up/i.test(
+  // undici reporta los cortes como "fetch failed" (TypeError) o con un `cause.code`
+  // de red. Se exige un patrón concreto: no cualquier TypeError es un corte.
+  return /fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|ECONNABORTED|SELF_SIGNED_CERT|UNABLE_TO_VERIFY|CERT_|socket hang up|other side closed/i.test(
     `${msg} ${cause}`
   );
 }
@@ -74,8 +75,16 @@ function classifyAiError(error) {
 function isRetriableAiError(error) {
   const status = statusOf(error);
   if (status === 429 || status === 500 || status === 503 || status === 504) return true;
+  if (isConnectionError(error)) return true;
   const m = String((error && error.message) || "");
   return /UNAVAILABLE|RESOURCE_EXHAUSTED|DEADLINE_EXCEEDED|saturado/i.test(m);
 }
 
-module.exports = { statusOf, retryDelaySeconds, isDailyQuota, classifyAiError, isRetriableAiError };
+module.exports = {
+  statusOf,
+  retryDelaySeconds,
+  isDailyQuota,
+  isConnectionError,
+  classifyAiError,
+  isRetriableAiError,
+};
