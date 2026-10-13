@@ -2,7 +2,8 @@
 
 **Actualizado:** martes 13/10/2026
 **Contexto:** latencia de la IA (modelo liviano para Autocompletar, nivel de razonamiento
-"low" en las tareas interactivas, reintentos/timeout y streaming del chat).
+"low" en las tareas interactivas, reintentos/timeout y streaming del chat) y **failover
+automático de modelos** (si uno está saturado, se usa otro sin cortar la consulta — §2.11).
 
 ---
 
@@ -21,6 +22,8 @@ modelo principal `gemini-3.8-flash`: la API responde
 
 > Si `gemini-3.8-flash` sigue saturado para la demo: `GEMINI_MODEL=gemini-3.5-flash` en
 > `backend/.env` (afecta chat y scoring). Es una variable de entorno, no hace falta tocar código.
+> **Igual, ya no es imprescindible: el failover (§2.11) pasa solo a `gemini-3.5-flash` cuando el
+> principal responde 503.**
 
 ### 1.1 Checklist a completar cuando el modelo principal responda
 
@@ -30,6 +33,10 @@ modelo principal `gemini-3.8-flash`: la API responde
   - Esperado: estado **"Listo. Se analizaron 5 CVs. Ranking actualizado."** + toast
     "CVs analizados.".
   - Consume ~5 requests.
+  - **Estado al 13/10:** el camino de código **se ejecuta** (llega a la API y hace failover
+    si el modelo falla), pero el análisis **no se completó** por **429 (cuota diaria de
+    `3.8-flash`)** + **503** intermitente de `3.5-flash`. **Pendiente reintentar cuando baje
+    la saturación.** El failover de la cadena de scoring está probado con stubs (§2.11).
 
 - [ ] **Análisis incremental (no re-gasta cuota).**
   - Con la vacante ya analizada, subir **1 CV nuevo** y pulsar **"Analizar CVs (1)"**.
@@ -44,11 +51,14 @@ modelo principal `gemini-3.8-flash`: la API responde
     intentar para completar."* y el botón "Analizar" habilitado de nuevo.
   - Consume ~2 requests. **Ya validado con un stub** (ver sección 3), falta el caso real.
 
-- [ ] **Chat RAG con respuesta real del modelo.**
-  - Sobre la vacante analizada, preguntar p. ej. *"¿Quién tiene más experiencia con React?"*.
+- [x] **Chat RAG con respuesta real del modelo.** — **HECHO (13/10)**
+  - Sobre una vacante analizada, preguntar p. ej. *"¿Quién tiene más experiencia con React?"*.
   - Esperado: Markdown renderizado (**negrita**, **viñetas**, listas numeradas) con
     **nombres resaltados** y los chips de **fuentes** con su similitud.
-  - Consume 1–2 requests. **Ya validado con un stub** (ver sección 3), falta el caso real.
+  - **Verificado con el modelo real y el failover:** `POST /chat` → **200**; `POST /chat/stream`
+    emitió `sources` → `notice` (503 de `3.8-flash`) → `delta`* → `done`, y en otra corrida
+    `delta` parcial → `restart` → `delta`* → `done` (la consulta **no** se cortó). UI validada
+    en el navegador (el `restart` vacía la burbuja y avisa; el `notice` cambia el indicador).
 
 ### 1.2 Cómo probar sin gastar de más
 
@@ -296,6 +306,42 @@ $env:GEMINI_MODEL="gemini-3.5-flash"; node src/app.js
     `gemini-3.8-flash` devolvía **503** en ese momento.
 - **Pendiente / a decidir.** Si el modelo principal (`gemini-3.8-flash`) sigue saturado, poner
   en `.env` `GEMINI_MODEL=gemini-3.5-flash` (afecta al chat y al scoring) para la demo.
+  **Resuelto por el failover (2.11): ya no hace falta cambiar la config a mano.**
+
+### 2.11 Failover de modelos (la IA no se cae si un modelo está saturado) — HECHO
+- **Motivación.** `gemini-3.8-flash` (el principal) responde **503** de forma intermitente. Antes,
+  eso cortaba la consulta. Ahora, si un modelo falla, se **prueba automáticamente con el siguiente**
+  y el usuario no ve el error: la respuesta sale igual (con otro modelo).
+- **Clasificación del error** (`classifyAiError`, `gemini.service.js`):
+  - `retry-same` — **429 por minuto**: se espera y se reintenta el **mismo** modelo.
+  - `next-model` — **503** (saturado), **429 por día** (cuota diaria), **404** (modelo retirado),
+    cortes de red y **cualquier error sin código**. Pasa al siguiente modelo.
+  - `fatal` — **400/401/403/422**: no se reintenta (se informa el error).
+- **Cadena por tarea** (`config.js`): `GEMINI_{SUGGEST,CHAT,SCORING}_MODELS` (lista separada por
+  comas, en orden de preferencia). Por defecto: el modelo de la tarea + `gemini-3.5-flash` +
+  `gemini-3.5-flash-lite`. **Ojo:** dos alias de la misma familia comparten cuota, por eso la cadena
+  usa **familias distintas**.
+- **Motor** (`runWithFallback`/`attemptPlan`): recorre la cadena `AI_FAILOVER_ROUNDS` veces (default
+  **2**) con un tope total de `AI_TOTAL_TIMEOUT_MS` (**120 s**) por consulta/CV, y `AI_REQUEST_TIMEOUT_MS`
+  (**45 s**) por intento.
+- **Circuit breaker (suave).** Un modelo que falla se **enfría** `AI_MODEL_COOLDOWN_MS` (**45 s**) y
+  pasa al **final** de la cadena (no se descarta: si todos están fríos, igual se intenta). Así, tras
+  el primer 503, las siguientes consultas ya arrancan por un modelo sano.
+- **Streaming con reintento ("modo b").** Si el modelo se corta **a mitad** de la respuesta, el texto
+  parcial ya no sirve: el backend emite **`restart`**, el frontend **vacía la burbuja**, avisa
+  ("Se cortó la respuesta a mitad; reinicio con otro modelo.") y sigue con el próximo modelo. Si el
+  corte ocurre **antes** de escribir, el cambio es silencioso y solo se emite un **`notice`**
+  ("El modelo estaba ocupado; probando otro…").
+- **Embeddings:** **sin** fallback de modelo (cambiar de embedding rompería la comparación de vectores
+  ya guardados); solo reintento con backoff.
+- **Protocolo SSE:** `sources` → (`notice`) → `delta`* → (`restart` → `delta`*) → `done` | `error`.
+- **Verificado.**
+  - **Sin cuota (stubs):** 10 escenarios con `fetch` stubeado — 503→B; A sano y B nunca se llama;
+    breaker (2ª consulta arranca por B); 429/min reintenta el mismo; 429/día salta; 401 no salta;
+    todos fallan → error tras 2 rondas; **streaming** con `restart` (parcial descartado) y `notice`.
+  - **Real:** `POST /chat` (antes bloqueado por el 503) → **200** con el failover; SSE
+    `sources`(~150 ms) → `notice`(~240 ms, 503 de `3.8-flash`) → `delta`(~4,1 s) → `done`(~4,9 s),
+    653 chars.
 
 ---
 

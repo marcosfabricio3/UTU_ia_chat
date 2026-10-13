@@ -9,7 +9,7 @@ const chatService = require("../services/chat.service");
 const { generateResponse, friendlyAiError } = require("../services/gemini.service");
 const { SUGGEST_SYSTEM_INSTRUCTION, SUGGEST_SCHEMA } = require("../prompts/suggest.prompt");
 const { rateLimit } = require("../middleware/rate-limit");
-const { geminiSuggestModel, thinkingLevel, aiRetries } = require("../config");
+const { modelChains, thinkingLevel } = require("../config");
 
 const router = express.Router();
 
@@ -116,9 +116,8 @@ router.post("/suggest", aiLimit, async (req, res) => {
     const text = await generateResponse(buildSuggestPrompt(titulo, requisitos), {
       systemInstruction: SUGGEST_SYSTEM_INSTRUCTION,
       responseSchema: SUGGEST_SCHEMA,
-      model: geminiSuggestModel,
+      models: modelChains.suggest,
       thinkingLevel: thinkingLevel.suggest,
-      attempts: aiRetries.interactive,
       label: "suggest",
     });
     const data = JSON.parse(text);
@@ -364,6 +363,10 @@ router.post("/:id/chat", aiLimit, loadJob, async (req, res) => {
 // Chat RAG en streaming (Server-Sent Events): la respuesta se ve "escribiéndose".
 // Secuencia de eventos: `sources` (CVs citados) → muchos `delta` (fragmentos de
 // texto) → `done`. Ante un error a mitad de camino, un evento `error`.
+//
+// Failover: si el modelo se cae a mitad de la respuesta, se emite `notice`
+// (cambio silencioso, aún sin texto) o `restart` (había texto parcial: el cliente
+// debe vaciar la burbuja y seguir); después siguen más `delta` con otro modelo.
 // La recuperación (embedding) se hace ANTES de abrir el stream: si falla, todavía
 // se puede responder un JSON con status HTTP normal.
 router.post("/:id/chat/stream", aiLimit, loadJob, async (req, res) => {
@@ -408,8 +411,10 @@ router.post("/:id/chat/stream", aiLimit, loadJob, async (req, res) => {
 
   send("sources", prepared.fuentes);
   try {
-    for await (const delta of chatService.chatStream(prepared)) {
-      send("delta", delta);
+    for await (const evt of chatService.chatStream(prepared)) {
+      if (evt.type === "delta") send("delta", evt.text);
+      else if (evt.type === "notice") send("notice", { message: evt.message });
+      else if (evt.type === "restart") send("restart", { message: evt.message, model: evt.model });
     }
     send("done", { ok: true });
   } catch (error) {

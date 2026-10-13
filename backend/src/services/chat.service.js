@@ -2,15 +2,14 @@ const { generateResponse, generateResponseStream } = require("./gemini.service")
 const { retrieveRelevantCvs } = require("./retrieval.service");
 const { CHAT_SYSTEM_INSTRUCTION } = require("../prompts/chat.prompt");
 const store = require("./store.service");
-const { geminiChatModel, thinkingLevel, aiRetries } = require("../config");
+const { modelChains, thinkingLevel } = require("../config");
 
-// Opciones de latencia del chat: modelo de chat, razonamiento bajo (es RAG: el
-// contexto ya está dado) y pocos reintentos porque el usuario está esperando.
+// Opciones de latencia del chat: cadena de modelos (con failover) y razonamiento
+// bajo (es RAG: el contexto ya está dado).
 const CHAT_OPTS = {
   systemInstruction: CHAT_SYSTEM_INSTRUCTION,
-  model: geminiChatModel,
+  models: modelChains.chat,
   thinkingLevel: thinkingLevel.chat,
-  attempts: aiRetries.interactive,
   label: "chat",
 };
 
@@ -80,7 +79,8 @@ async function chat(jobId, question, history = []) {
   return { respuesta, fuentes: prepared.fuentes };
 }
 
-// Chat en streaming: cede los fragmentos de texto a medida que llegan.
+// Chat en streaming: cede los eventos del modelo (delta / notice / restart) a
+// medida que llegan, para que la ruta los traduzca a SSE.
 async function* chatStream(prepared) {
   yield* generateResponseStream(prepared.prompt, CHAT_OPTS);
 }
