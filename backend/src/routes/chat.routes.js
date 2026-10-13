@@ -27,7 +27,7 @@ router.post("/", chatLimit, async (req, res) => {
       response,
     });
   } catch (error) {
-    console.error("Error al consultar Gemini:", error.message);
+    console.error("Error en el chat suelto:", error.message);
 
     res.status(500).json({
       success: false,

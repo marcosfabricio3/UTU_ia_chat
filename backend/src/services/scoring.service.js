@@ -1,8 +1,9 @@
 const { generateResponse, embedTexts, friendlyAiError } = require("./ai.service");
 const { SYSTEM_INSTRUCTION, buildScoreSchema } = require("../prompts/scoring.prompt");
 const { extractPdf } = require("./pdfText");
+const { isAnalyzed } = require("./cv");
 const store = require("./store.service");
-const { modelChains, thinkingLevel, pdfMode } = require("../config");
+const { modelChains, thinkingLevel, thinkingBudget, maxOutputTokens, pdfMode } = require("../config");
 
 function buildVacancyText(job) {
   return `VACANTE: ${job.titulo}
@@ -52,6 +53,8 @@ async function scoreCv(job, cv) {
     responseSchema: buildScoreSchema({ withExtractedText: usingPdf }),
     files: usingPdf ? [{ path: cv.path, mimeType: "application/pdf" }] : undefined,
     thinkingLevel: thinkingLevel.scoring,
+    thinkingBudget: thinkingBudget.scoring,
+    maxOutputTokens,
     models: modelChains.scoring,
     label: "scoring",
   });
@@ -76,10 +79,9 @@ async function analyzeJob(jobId, { concurrency = 3, force = false } = {}) {
   if (!job) return { job: null, failed: [], analyzedNow: 0, skipped: 0, pending: 0 };
 
   const todos = job.cvs.slice();
-  // Un CV está "listo" cuando tiene score Y vector (el chat RAG necesita el vector).
-  // Si falló el embedding, queda pendiente para reintentar.
-  const estaListo = (c) => typeof c.score === "number" && Array.isArray(c.vector);
-  const pendientes = force ? todos : todos.filter((c) => !estaListo(c));
+  // "Pendiente" = todavía no está analizado (ver services/cv.js). Cubre tanto al
+  // CV nuevo como al que quedó a medias (p. ej. si falló el embedding).
+  const pendientes = force ? todos : todos.filter((c) => !isAnalyzed(c));
   const skipped = todos.length - pendientes.length;
 
   const failed = [];
@@ -121,7 +123,7 @@ async function analyzeJob(jobId, { concurrency = 3, force = false } = {}) {
   await Promise.all(workers);
 
   const updated = store.getJob(jobId);
-  const pending = updated ? updated.cvs.filter((c) => typeof c.score !== "number").length : 0;
+  const pending = updated ? updated.cvs.filter((c) => !isAnalyzed(c)).length : 0;
   return { job: updated, failed, analyzedNow, skipped, pending };
 }
 
@@ -131,7 +133,7 @@ function getRanking(jobId) {
   if (!job) return null;
 
   const items = job.cvs
-    .filter((c) => typeof c.score === "number")
+    .filter(isAnalyzed)
     .map((c) => ({
       id: c.id,
       archivo: c.archivo,

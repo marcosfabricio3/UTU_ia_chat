@@ -2,7 +2,7 @@ const { generateResponse, generateResponseStream } = require("./ai.service");
 const { retrieveRelevantCvs } = require("./retrieval.service");
 const { CHAT_SYSTEM_INSTRUCTION } = require("../prompts/chat.prompt");
 const store = require("./store.service");
-const { modelChains, thinkingLevel } = require("../config");
+const { modelChains, thinkingLevel, thinkingBudget, maxOutputTokens } = require("../config");
 
 // Opciones de latencia del chat: cadena de modelos (con failover) y razonamiento
 // bajo (es RAG: el contexto ya está dado).
@@ -10,6 +10,8 @@ const CHAT_OPTS = {
   systemInstruction: CHAT_SYSTEM_INSTRUCTION,
   models: modelChains.chat,
   thinkingLevel: thinkingLevel.chat,
+  thinkingBudget: thinkingBudget.chat,
+  maxOutputTokens,
   label: "chat",
 };
 

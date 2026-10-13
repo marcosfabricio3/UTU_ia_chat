@@ -176,7 +176,7 @@ function createOpenAiCompat({ id, baseUrl, apiKey }) {
     }
   }
 
-  return { id, accepts: ["text"], supportsThinking: false, generate, stream };
+  return { id, accepts: ["text"], generate, stream };
 }
 
 module.exports = { createOpenAiCompat };

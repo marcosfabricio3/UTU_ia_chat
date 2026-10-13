@@ -1,4 +1,5 @@
 const { embedTexts } = require("./ai.service");
+const { isAnalyzed } = require("./cv");
 
 // Similitud coseno entre dos vectores. Devuelve 0 si alguno es inválido o si
 // no tienen la misma dimensión (evita NaN por comparar vectores de distinto tamaño).
@@ -21,7 +22,7 @@ function cosineSimilarity(a, b) {
 
 // Recupera los CVs más parecidos a la pregunta (solo los que tienen vector).
 async function retrieveRelevantCvs(job, question, topK = 5) {
-  const conVector = job.cvs.filter((c) => Array.isArray(c.vector));
+  const conVector = job.cvs.filter(isAnalyzed);
   if (!conVector.length) return [];
 
   const [qVector] = await embedTexts([question]);

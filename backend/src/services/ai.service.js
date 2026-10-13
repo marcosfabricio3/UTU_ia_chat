@@ -7,6 +7,7 @@ const {
   aiModelCooldownMs,
   aiSameModelRetries,
   aiRetries,
+  parseEntry,
 } = require("../config");
 const { getProvider } = require("./providers");
 const geminiProvider = require("./providers/gemini");
@@ -38,19 +39,9 @@ async function withRetry(fn, { attempts = 3, baseDelayMs = 1000, label = "ai" } 
 
 /* ---------------- Cadena y capacidades ---------------- */
 
-// Normaliza una entrada de cadena. Acepta `{ provider, model }` (nuevo) o el
-// nombre suelto de un modelo (compatibilidad: proveedor Gemini).
-function toEntry(x) {
-  if (typeof x === "string") {
-    const idx = x.indexOf(":");
-    return idx > 0 ? { provider: x.slice(0, idx), model: x.slice(idx + 1) } : { provider: "gemini", model: x };
-  }
-  return { provider: x.provider || "gemini", model: x.model };
-}
-
 function chainOf(models, model) {
   const arr = models && models.length ? models : [model || geminiModel];
-  return arr.map(toEntry);
+  return arr.map(parseEntry);
 }
 
 function keyOf(entry) {

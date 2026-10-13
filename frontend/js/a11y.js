@@ -98,14 +98,14 @@ window.CV = window.CV || {};
       if (currentJobId && list.some((j) => j.id === currentJobId)) return currentJobId;
       const active = CV.app.state.activeJobId;
       if (active && list.some((j) => j.id === active)) return active;
-      const analyzed = list.find((j) => (j.cvs || []).some((c) => typeof c.score === "number"));
+      const analyzed = list.find((j) => (j.cvs || []).some((c) => c.analizado));
       return (analyzed || list[0]).id;
     },
 
     // "<option>" de una vacante para los selects de Ranking/Chat. Reutiliza la
     // misma etiqueta ("(n analizados)" / "(sin analizar)") en las dos vistas.
     jobOption(job, selectedId) {
-      const n = (job.cvs || []).filter((c) => typeof c.score === "number").length;
+      const n = (job.cvs || []).filter((c) => c.analizado).length;
       const label = job.titulo + (n ? " (" + n + " analizados)" : " (sin analizar)");
       return `<option value="${util.esc(job.id)}"${job.id === selectedId ? " selected" : ""}>${util.esc(label)}</option>`;
     },

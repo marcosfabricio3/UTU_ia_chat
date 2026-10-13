@@ -108,7 +108,7 @@ CV.views = CV.views || {};
 
   function jobCard(job) {
     const n = (job.cvs || []).length;
-    const analyzed = (job.cvs || []).filter((c) => typeof c.score === "number").length;
+    const analyzed = (job.cvs || []).filter((c) => c.analizado).length;
     const pendientes = Math.max(0, n - analyzed); // CVs sin analizar (nuevos o que fallaron)
     const open = expandedId === job.id;
     const st = status[job.id];
@@ -392,7 +392,7 @@ CV.views = CV.views || {};
     // los pendientes (CVs nuevos o que fallaron antes).
     const job = (CV.app.state.jobs || []).find((j) => j.id === id);
     const cvs = (job && job.cvs) || [];
-    const analyzed = cvs.filter((c) => typeof c.score === "number").length;
+    const analyzed = cvs.filter((c) => c.analizado).length;
     const pendientes = Math.max(0, cvs.length - analyzed);
     const force = analyzed > 0 && pendientes === 0;
     const aAnalizar = pendientes || cvs.length;
