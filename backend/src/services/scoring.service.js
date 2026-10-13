@@ -76,7 +76,10 @@ async function analyzeJob(jobId, { concurrency = 3, force = false } = {}) {
   if (!job) return { job: null, failed: [], analyzedNow: 0, skipped: 0, pending: 0 };
 
   const todos = job.cvs.slice();
-  const pendientes = force ? todos : todos.filter((c) => typeof c.score !== "number");
+  // Un CV está "listo" cuando tiene score Y vector (el chat RAG necesita el vector).
+  // Si falló el embedding, queda pendiente para reintentar.
+  const estaListo = (c) => typeof c.score === "number" && Array.isArray(c.vector);
+  const pendientes = force ? todos : todos.filter((c) => !estaListo(c));
   const skipped = todos.length - pendientes.length;
 
   const failed = [];
@@ -87,16 +90,20 @@ async function analyzeJob(jobId, { concurrency = 3, force = false } = {}) {
     while (cursor < pendientes.length) {
       const cv = pendientes[cursor++];
       try {
-        const data = await scoreCv(job, cv);
+        // Si ya estaba puntuado y solo falta el vector (p. ej. falló el embedding en
+        // un intento previo), se reutiliza el texto guardado: NO se gasta cuota de
+        // scoring, solo se vuelve a calcular el embedding.
+        const data = typeof cv.score === "number" && cv.texto_extraido ? cv : await scoreCv(job, cv);
 
-        let vector = null;
-        try {
-          if (data.texto_extraido) {
-            vector = (await embedTexts([data.texto_extraido]))[0];
-          }
-        } catch (e) {
-          console.error("Embedding falló para", cv.id, e.message);
+        if (!data.texto_extraido) {
+          const error = new Error("El análisis no devolvió texto del CV para indexar.");
+          error.userFacing = true;
+          throw error;
         }
+
+        // El vector es imprescindible para el chat: si el embedding falla, el CV NO
+        // queda como analizado (sigue pendiente) y el error se informa.
+        const vector = (await embedTexts([data.texto_extraido]))[0];
 
         // updateCv es síncrono (read-modify-write completo): los workers no se
         // pisan entre sí porque no hay await dentro de la actualización.

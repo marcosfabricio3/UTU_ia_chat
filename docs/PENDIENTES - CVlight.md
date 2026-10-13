@@ -3,9 +3,9 @@
 **Actualizado:** martes 13/10/2026
 **Contexto:** latencia de la IA (modelo liviano para Autocompletar, nivel de razonamiento
 "low" en las tareas interactivas, reintentos/timeout y streaming del chat), **failover
-automático de motores** (si uno está saturado, se usa otro sin cortar la consulta — §2.11)
-y **segundo motor (Groq) + extracción local del texto del PDF** (con reordenamiento de
-columnas — §2.12).
+automático de motores** (si uno está saturado, se usa otro sin cortar la consulta — §2.11),
+**segundo motor (Groq) + extracción local del texto del PDF** (con reordenamiento de
+columnas — §2.12) y **fix de indexación (el chat RAG ya funciona) — §2.13**.
 
 ---
 
@@ -388,9 +388,10 @@ $env:GEMINI_MODEL="gemini-3.5-flash"; node src/app.js
 - **Límite duro:** CV **escaneado + Gemini sin cuota** = no hay con quién leerlo; la UI avisa
   *"Este CV es escaneado (o su layout no se pudo leer como texto) y necesita el motor con visión,
   que ahora no está disponible."* y queda pendiente para reintentar.
-- **Verificado — tests (15 `node:test`, `cd backend && npm test`).** Reordenamiento de columnas,
+- **Verificado — tests (16 `node:test`, `cd backend && npm test`).** Reordenamiento de columnas,
   no-falso-positivo de fechas, escaneado→`pdf`, failover 503/401/429(min/día), **salteo de motores
-  sin visión**, streaming con `restart`/`notice`, y **caída de conexión → reintenta el mismo motor**.
+  sin visión**, streaming con `restart`/`notice`, **caída de conexión → reintenta el mismo motor**
+  y **embedding con el modelo correcto de config**.
 - **Verificado — smoke real con Groq (13/10, con `GROQ_API_KEY`).**
   - **Generación** (`openai/gpt-oss-120b`), **streaming** (33 `delta`) y **schema JSON del scoring**
     (`openai/gpt-oss-20b`): score 70, skills `React+JavaScript+TypeScript`. Todo OK.
@@ -402,6 +403,30 @@ $env:GEMINI_MODEL="gemini-3.5-flash"; node src/app.js
     lo que da `fetch failed` sin código. Se maneja como **reintento del mismo motor** (arriba). Si
     molesta, se agrega el certificado del proxy con `NODE_EXTRA_CA_CERTS` o se desactiva el escaneo
     de HTTPS del antivirus.
+
+### 2.13 Fix: CV analizado sin vector rompía el chat (RAG) — HECHO
+- **Síntoma.** Se analizaba un CV y decía **OK**, pero al abrir el chat respondía
+  *"Primero tenés que analizar los CVs (POST /analyze)."*
+- **Causa raíz (dos capas).**
+  1. **Bug de wiring:** tras el refactor a `ai.service.js`, `embedTexts` pasaba
+     `model: geminiProvider.embedModel` (una propiedad **inexistente** → `undefined`). El SDK de
+     Gemini fallaba al instante con `Cannot read properties of undefined (reading 'includes')`.
+     Es decir: **ningún embedding funcionaba** desde el refactor. Se corrigió para usar
+     `geminiEmbedModel`/`embedDimensions` de `config`.
+  2. **Diseño:** si el embedding fallaba, el scoring **igual marcaba el CV como analizado**
+     (`score` + `vector: null`) y el error se tragaba. El chat exige `vector` (arreglo), así que
+     rechazaba la vacante; y como el CV ya tenía `score`, el "analizar pendientes" no lo reintentaba.
+- **Arreglo.**
+  - `embedTexts` usa el modelo correcto de `config` y **reintenta** cortes de conexión (no tiene
+    failover de modelo: cambiar de embedding rompería la comparación de vectores).
+  - El CV **no se marca analizado sin vector**: si el embedding falla, se informa como **fallo**
+    (queda pendiente y reintentable).
+  - Un CV **ya puntuado pero sin vector** se **reindexa reutilizando el texto guardado** (sin
+    volver a gastar cuota de scoring).
+  - El filtro de "pendientes" ahora es **sin `score` o sin vector**.
+- **Verificado.** Test de regresión (el modelo de embedding no debe ser `undefined`) y E2E real:
+  el CV de "conserje" que quedó en `vector: null` se reindexó (**768 d**) reusando su texto, y el
+  chat RAG respondió citando a la candidata.
 
 ---
 

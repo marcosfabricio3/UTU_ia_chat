@@ -225,3 +225,28 @@ test("stream: caída de conexión antes de emitir → reintenta el mismo motor",
   assert.strictEqual(aCalls, 2);
   assert.ok(!events.some((e) => e.type === "notice"), "no debería saltar de motor");
 });
+
+test("embedTexts usa el modelo de embedding de config (no undefined)", async () => {
+  const config = require("../src/config");
+  const geminiProvider = require("../src/services/providers/gemini");
+  const { embedTexts } = require("../src/services/ai.service");
+
+  const original = geminiProvider.getClient;
+  let capturado = null;
+  geminiProvider.getClient = async () => ({
+    models: {
+      embedContent: async (args) => {
+        capturado = args;
+        return { embeddings: [{ values: [0.1, 0.2, 0.3] }] };
+      },
+    },
+  });
+  try {
+    const vectores = await embedTexts(["un texto"]);
+    assert.deepEqual(vectores, [[0.1, 0.2, 0.3]]);
+    assert.strictEqual(capturado.model, config.geminiEmbedModel, "el modelo no debe ser undefined");
+    assert.strictEqual(capturado.config.outputDimensionality, config.embedDimensions);
+  } finally {
+    geminiProvider.getClient = original;
+  }
+});
