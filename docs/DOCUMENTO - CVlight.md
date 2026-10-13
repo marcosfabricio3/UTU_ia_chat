@@ -99,11 +99,12 @@ entrada es `modelo` (Gemini) o `proveedor:modelo`:
 | Embeddings (RAG) | `GEMINI_EMBED_MODEL` | `gemini-embedding-001` | Vectores de **768** dimensiones (`outputDimensionality`) |
 
 Cada tarea define una **cadena** de motores (en orden de preferencia): si el primero
-está **saturado (503)**, con la **cuota diaria agotada (429)**, fue **retirado (404)**
-o se **cortó la conexión**, se pasa al siguiente **sin cortar la consulta**
-(`401/403/400` son fatales). Un pedido que lleva el **PDF adjunto** **saltea** los
-motores que no leen PDF (Groq): el orquestador **filtra por capacidad** según el
-tipo de contenido. La cadena de Gemini combina **familias y buckets distintos** (los
+está **saturado (503)**, con la **cuota diaria agotada (429)** o fue **retirado (404)**,
+se pasa al siguiente **sin cortar la consulta** (`401/403/400` son fatales). Un **corte
+de conexión** (sin respuesta HTTP) se **reintenta en el mismo motor** antes de saltar,
+para no gastar la cuota del respaldo por un problema de red local. Un pedido que lleva el
+**PDF adjunto** **saltea** los motores que no leen PDF (Groq): el orquestador **filtra por
+capacidad** según el tipo de contenido. La cadena de Gemini combina **familias y buckets distintos** (los
 alias de una misma familia comparten cuota): `3.1-flash-lite` va al final porque su
 **bucket diario es independiente** del de la familia 3.5/3.6/3.8, de modo que la IA
 sigue respondiendo aun cuando el cupo "flash" se agotó. Un motor que falla se
@@ -334,6 +335,7 @@ intercepta `fetch`):
 | 429 por minuto vs. cuota diaria | ✅ Reintenta el mismo vs. salta al siguiente |
 | Pedido con PDF y cadena de solo texto | ✅ **Saltea** el motor sin visión |
 | Streaming que falla a mitad | ✅ Emite `restart` (vaciar burbuja) y sigue |
+| Caída de conexión (sin HTTP, p. ej. proxy TLS) | ✅ **Reintenta el mismo motor** (no salta de proveedor) |
 
 ---
 

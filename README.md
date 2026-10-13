@@ -78,8 +78,11 @@ también se puede abrir con `file://` porque el backend tiene CORS abierto.)
 > (p. ej. `groq:openai/gpt-oss-120b`).
 
 **Failover de motores:** si el primero de la cadena está saturado (`503`), tiene la
-cuota diaria agotada (`429`), fue retirado (`404`) o se corta la conexión, se pasa
-al siguiente **sin cortar la consulta**. Un `401/403/400` es fatal y no se reintenta.
+cuota diaria agotada (`429`) o fue retirado (`404`), se pasa al siguiente **sin
+cortar la consulta**. Un `401/403/400` es fatal y no se reintenta. Un **corte de
+conexión** (sin respuesta HTTP, p. ej. un proxy TLS intermitente) se **reintenta en
+el mismo motor** antes de saltar, para no gastar la cuota del respaldo por un
+problema de red local.
 Un motor que falla se enfría (pasa al final de la cadena) durante `AI_MODEL_COOLDOWN_MS`.
 Un pedido que lleva el **PDF adjunto** saltea los motores que no leen PDF (Groq): el
 orquestador filtra por capacidad. La cadena de Gemini termina en `gemini-3.1-flash-lite`,
