@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { pdfMinTextChars } = require("../config");
 
 // Extracción de texto de un PDF con detección y reordenamiento de columnas.
 //
@@ -18,7 +19,7 @@ const path = require("path");
 // Devuelve { payload: "text" | "pdf", text, pages, columns, motivo }.
 
 // Por debajo de esto consideramos que no hay texto útil (escaneado o vacío).
-const MIN_TEXT_CHARS = Number(process.env.PDF_MIN_TEXT_CHARS) || 150;
+const MIN_TEXT_CHARS = pdfMinTextChars;
 
 // Tolerancia vertical (unidades del PDF) para agrupar fragmentos en una línea.
 const ROW_TOL = 3;
@@ -187,12 +188,6 @@ function pageToText(page) {
   return { text: rowsToText(left) + "\n" + rowsToText(right), gutter };
 }
 
-// Texto plano del PDF (sin decisión de payload). Útil para tests/diagnóstico.
-async function extractText(filePath) {
-  const pages = await extractItems(filePath);
-  return pages.map((pg) => pageToText(pg).text).join("\n\n");
-}
-
 // Decide cómo procesar el CV:
 //   payload "text" → se manda el texto extraído a cualquier motor.
 //   payload "pdf"  → hay que mandar el PDF nativo (escaneado o sin texto útil).
@@ -247,4 +242,4 @@ async function extractPdf(filePath, { mode = "auto" } = {}) {
   };
 }
 
-module.exports = { extractPdf, extractText, MIN_TEXT_CHARS };
+module.exports = { extractPdf };

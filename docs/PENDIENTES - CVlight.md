@@ -156,9 +156,9 @@ $env:GEMINI_MODEL="gemini-3.5-flash"; node src/app.js
   (`store.service.js`). Mismo criterio que al borrar la vacante: primero el registro
   (fuente de verdad) y después el PDF, *best-effort*. `404` si no existe la vacante o el CV.
 - **Sale del RAG sin invalidar nada:** no hay índice cacheado. `POST /:id/chat` relee la
-  vacante en cada request y tanto el guard `hayAnalizados` (`c.vector`) como
-  `retrieveRelevantCvs` filtran sobre `job.cvs`: al quitar el CV del registro deja de poder
-  recuperarse. El ranking usa el mismo criterio (`typeof c.score === "number"`).
+  vacante en cada request y tanto el guard `hayAnalizados` como `retrieveRelevantCvs` filtran
+  sobre `job.cvs`: al quitar el CV del registro deja de poder recuperarse. El ranking y el guard
+  comparten la misma regla `isAnalyzed` (`services/cv.js`): score **y** vector.
 - **Frontend:** el botón es un `<button class="chip-x" data-action="shred" data-job data-cv>`
   con `aria-label="Eliminar el CV «archivo»"`. La identidad viaja en `data-job` + `data-cv`
   (ids reales), igual que en el resto de la vista. Reusa `CV.ui.confirm` y un Set
@@ -198,7 +198,7 @@ $env:GEMINI_MODEL="gemini-3.5-flash"; node src/app.js
   y el mensaje mentía: *"Analizados 0 de 2"* aunque la vacante siguiera con 1 analizado (el
   frontend calculaba `total - failed`).
 - **Skip.** `analyzeJob(jobId, { concurrency, force })` procesa solo los **pendientes**
-  (`typeof c.score !== "number"`). Un CV que falla **no** se marca (queda sin score), así que el
+  (`!isAnalyzed(c)`). Un CV que falla **no** se marca (queda sin score o sin vector), así que el
   siguiente intento lo **reintenta solo**. `force: true` re-analiza todo.
 - **Reintento automático.** `gemini.service` reintenta los errores **transitorios** (503 saturado,
   429 límite por minuto, 500, 504) hasta 3 veces con espera creciente (1s, 2s). No reintenta
@@ -292,11 +292,12 @@ $env:GEMINI_MODEL="gemini-3.5-flash"; node src/app.js
     `GEMINI_THINKING_LEVEL_{SUGGEST,CHAT,SCORING}` (vacío = default del modelo).
     *(Nota: en Gemini 3 el ajuste correcto es `thinkingLevel`; `thinkingBudget: 0` —lo que
     sugería la versión vieja de la doc— devuelve `400 INVALID_ARGUMENT` en estos modelos.)*
-  - **Reintentos y timeout** (`gemini.service.js`): `withRetry` con `attempts` por tarea
-    (`GEMINI_RETRIES_INTERACTIVE=2` en Autocompletar/chat, `GEMINI_RETRIES_BATCH=3` en
-    scoring) y **timeout por intento** (`AI_REQUEST_TIMEOUT_MS`, default 120 s) a nivel de
-    cliente. En el frontend, `api.js` corta cada `fetch` con `AbortController` (120 s; 10 min
-    en el análisis) y traduce el corte a un mensaje claro.
+  - **Reintentos y timeout** (`providers/gemini.js`): `withRetry` con `attempts` para los
+    **embeddings** (`GEMINI_RETRIES_BATCH=3`; no tienen failover de modelo) y **timeout por
+    intento** (`AI_REQUEST_TIMEOUT_MS`, default 120 s) a nivel de cliente. Las llamadas
+    interactivas (Autocompletar/chat/scoring) no reintentan el mismo motor: el **failover** de
+    la cadena se encarga. En el frontend, `api.js` corta cada `fetch` con `AbortController`
+    (120 s; 10 min en el análisis) y traduce el corte a un mensaje claro.
   - **Streaming en el chat** (SSE): `POST /api/jobs/:id/chat/stream` manda `sources` → muchos
     `delta` → `done` (o `error`). `chat.service.prepare()` hace la recuperación (embedding)
     **antes** de abrir el stream. El frontend (`chat.js`) escribe la respuesta a medida que

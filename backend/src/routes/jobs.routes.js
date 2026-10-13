@@ -7,9 +7,10 @@ const store = require("../services/store.service");
 const scoringService = require("../services/scoring.service");
 const chatService = require("../services/chat.service");
 const { generateResponse, friendlyAiError } = require("../services/ai.service");
+const { isAnalyzed } = require("../services/cv");
 const { SUGGEST_SYSTEM_INSTRUCTION, SUGGEST_SCHEMA } = require("../prompts/suggest.prompt");
 const { rateLimit } = require("../middleware/rate-limit");
-const { modelChains, thinkingLevel } = require("../config");
+const { modelChains, thinkingLevel, thinkingBudget, maxOutputTokens } = require("../config");
 
 const router = express.Router();
 
@@ -47,12 +48,14 @@ function loadJob(req, res, next) {
 
 // Proyección pública de un candidato: quita los campos internos/pesados que el
 // frontend no usa (el embedding, el texto extraído del PDF y la ruta en disco),
-// para no mandarlos por HTTP en cada listado.
+// para no mandarlos por HTTP en cada listado. Agrega `analizado` (la regla vive en
+// services/cv.js) para que el frontend no la reimplemente con "¿tiene score?".
 function publicCv(cv) {
   const out = { ...cv };
   delete out.vector;
   delete out.texto_extraido;
   delete out.path;
+  out.analizado = isAnalyzed(cv);
   return out;
 }
 
@@ -118,6 +121,8 @@ router.post("/suggest", aiLimit, async (req, res) => {
       responseSchema: SUGGEST_SCHEMA,
       models: modelChains.suggest,
       thinkingLevel: thinkingLevel.suggest,
+      thinkingBudget: thinkingBudget.suggest,
+      maxOutputTokens,
       label: "suggest",
     });
     const data = JSON.parse(text);
@@ -338,7 +343,7 @@ router.post("/:id/chat", aiLimit, loadJob, async (req, res) => {
     return res.status(400).json({ success: false, message: "El mensaje no puede estar vacío." });
   }
 
-  const hayAnalizados = req.job.cvs.some((c) => Array.isArray(c.vector));
+  const hayAnalizados = req.job.cvs.some(isAnalyzed);
   if (!hayAnalizados) {
     return res.status(400).json({
       success: false,
@@ -376,7 +381,7 @@ router.post("/:id/chat/stream", aiLimit, loadJob, async (req, res) => {
     return res.status(400).json({ success: false, message: "El mensaje no puede estar vacío." });
   }
 
-  const hayAnalizados = req.job.cvs.some((c) => Array.isArray(c.vector));
+  const hayAnalizados = req.job.cvs.some(isAnalyzed);
   if (!hayAnalizados) {
     return res.status(400).json({
       success: false,

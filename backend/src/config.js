@@ -21,10 +21,16 @@ function list(value) {
   return out;
 }
 
-// Una entrada de cadena es "modelo" (proveedor por defecto: Gemini) o
-// "proveedor:modelo" (p. ej. `groq:openai/gpt-oss-120b`). Se separa por el
-// PRIMER ":" para permitir modelos con ":" (p. ej. OpenRouter `:free`).
+// Normaliza una entrada de cadena a `{ provider, model }`. Acepta:
+//   - "modelo"                 → proveedor por defecto: Gemini.
+//   - "proveedor:modelo"       → p. ej. `groq:openai/gpt-oss-120b`. Se separa por
+//                                el PRIMER ":" para permitir modelos con ":"
+//                                (p. ej. OpenRouter `:free`).
+//   - `{ provider, model }`    → ya normalizada (se devuelve tal cual).
 function parseEntry(entry) {
+  if (entry && typeof entry === "object") {
+    return { provider: entry.provider || "gemini", model: entry.model };
+  }
   const raw = String(entry || "").trim();
   const idx = raw.indexOf(":");
   if (idx > 0) return { provider: raw.slice(0, idx), model: raw.slice(idx + 1) };
@@ -51,6 +57,7 @@ const geminiModel = str(process.env.GEMINI_MODEL, "gemini-3.8-flash");
 const FALLBACKS = ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
 
 module.exports = {
+  parseEntry,
   port: num(process.env.PORT, 3000),
   geminiApiKey: process.env.GEMINI_API_KEY,
   geminiModel,
@@ -100,6 +107,9 @@ module.exports = {
   // (escaneado) o el resultado es pobre, manda el PDF nativo; "pdf" siempre
   // manda el PDF (comportamiento previo, sin extracción).
   pdfMode: str(process.env.AI_PDF_MODE, "auto"),
+  // Por debajo de esta cantidad de caracteres se considera que el PDF no tiene
+  // capa de texto útil (escaneado o vacío) y se manda el PDF nativo.
+  pdfMinTextChars: num(process.env.PDF_MIN_TEXT_CHARS, 150),
 
   // Nivel de razonamiento ("thinking") de los modelos Gemini 3: "low" responde
   // más rápido y "high" razona más profundo. Vacío/"" = no se envía el ajuste y
@@ -141,7 +151,6 @@ module.exports = {
   // Reintentos para embeddings (no hay respaldo de modelo: cambiar de embedding
   // rompería la comparación de vectores ya guardados).
   aiRetries: {
-    interactive: num(process.env.GEMINI_RETRIES_INTERACTIVE, 2),
     batch: num(process.env.GEMINI_RETRIES_BATCH, 3),
   },
 };

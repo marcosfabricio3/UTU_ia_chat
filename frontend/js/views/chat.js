@@ -45,7 +45,7 @@ CV.views = CV.views || {};
     }
 
     const job = jobs.find((j) => j.id === jobId);
-    const analyzed = (job.cvs || []).some((c) => typeof c.score === "number");
+    const analyzed = (job.cvs || []).some((c) => c.analizado);
 
     panelEl.innerHTML = `
       <div class="chat-wrap">
@@ -178,7 +178,7 @@ CV.views = CV.views || {};
     const job = (CV.app.state.jobs || []).find((j) => j.id === jobId);
     if (!job) return;
 
-    const analyzed = (job.cvs || []).some((c) => typeof c.score === "number");
+    const analyzed = (job.cvs || []).some((c) => c.analizado);
     if (!analyzed) {
       CV.app.toast("Analizá los CVs primero.");
       return;

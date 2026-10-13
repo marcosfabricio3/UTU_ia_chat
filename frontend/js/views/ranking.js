@@ -69,7 +69,7 @@ CV.views = CV.views || {};
       return;
     }
 
-    const analyzed = (job.cvs || []).filter((c) => typeof c.score === "number");
+    const analyzed = (job.cvs || []).filter((c) => c.analizado);
     if (!analyzed.length) {
       body.innerHTML = emptyState(
         "Esta vacante todavía no tiene CVs analizados.",

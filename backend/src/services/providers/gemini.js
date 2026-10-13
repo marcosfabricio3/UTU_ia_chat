@@ -137,7 +137,6 @@ async function* stream(model, req) {
 module.exports = {
   id: "gemini",
   accepts: ["text", "pdf"],
-  supportsThinking: true,
   getClient,
   generate,
   stream,

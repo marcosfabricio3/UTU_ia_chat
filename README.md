@@ -64,6 +64,7 @@ también se puede abrir con `file://` porque el backend tiene CORS abierto.)
 | `GEMINI_SUGGEST_MODEL` / `GEMINI_CHAT_MODEL` | `GEMINI_MODEL` | Modelo único de cada tarea (si no hay cadena `*_MODELS`) |
 | `GEMINI_EMBED_MODEL` | `gemini-embedding-001` | Modelo de embeddings (siempre Gemini) |
 | `AI_PDF_MODE` | `auto` | `auto` = extrae texto local (y PDF nativo si es escaneado); `pdf` = siempre nativo |
+| `PDF_MIN_TEXT_CHARS` | `150` | Mínimo de texto extraído para considerarlo útil (si no, se manda el PDF nativo) |
 | `GEMINI_THINKING_LEVEL_{SUGGEST,CHAT,SCORING}` | `low`, `low`, `high` | Razonamiento de Gemini 3 (`low` = más rápido); Groq lo ignora |
 | `AI_REQUEST_TIMEOUT_MS` | `45000` | Corte por intento contra la IA (ms) |
 | `AI_TOTAL_TIMEOUT_MS` | `120000` | Tope total por consulta/CV, sumando intentos (ms) |
@@ -71,7 +72,7 @@ también se puede abrir con `file://` porque el backend tiene CORS abierto.)
 | `AI_MODEL_COOLDOWN_MS` | `45000` | Enfriamiento de un motor que falló (circuit breaker) |
 | `AI_SAME_MODEL_RETRIES` | `1` | Reintentos del mismo motor ante 429 por minuto |
 | `AI_QUOTA_SWITCH_SECONDS` | `60` | RetryDelay desde el que se considera cuota agotada (salta de motor) |
-| `GEMINI_RETRIES_{INTERACTIVE,BATCH}` | `2`, `3` | Reintentos de **embeddings** ante 503/429 |
+| `GEMINI_RETRIES_BATCH` | `3` | Reintentos de **embeddings** ante 503/429 |
 
 > Los nombres viejos `GEMINI_{SUGGEST,CHAT,SCORING}_MODELS` siguen leyéndose si no hay
 > `AI_*_MODELS`. Cada entrada de cadena es `modelo` (Gemini) o `proveedor:modelo`
