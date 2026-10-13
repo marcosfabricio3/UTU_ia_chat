@@ -12,8 +12,13 @@ suben los CV en PDF y la IA puntúa a cada candidato contra la vacante. Genera u
 ## Stack
 
 - **Backend:** Node.js + Express 5. Estado en un JSON (`backend/src/data/jobs.json`).
-- **IA:** Google Gemini (`@google/genai`) — `generateContent` (scoring y chat) y
-  `embedContent` (embeddings para la recuperación semántica del chat).
+- **IA:** dos motores con **failover** entre ellos:
+  - **Google Gemini** (`@google/genai`) — único con **visión** (lee el PDF nativo), para
+    CVs escaneados; y `embedContent` para los embeddings del chat (RAG).
+  - **Groq** (API compatible con OpenAI) — motor de **texto** con cuota diaria amplia;
+    recibe el texto del CV extraído localmente.
+  El texto del PDF se extrae en el backend con **`pdfjs-dist`**: si el CV está a **dos
+  columnas**, las detecta y **reordena** antes de mandarlo.
 - **Frontend:** HTML + CSS + **JavaScript vanilla**, sin paso de build ni
   dependencias. Se sirve como estático desde `/app`.
 - **Fuentes e iconos self-hosted**: la demo funciona sin internet (salvo la IA).
@@ -21,7 +26,8 @@ suben los CV en PDF y la IA puntúa a cada candidato contra la vacante. Genera u
 ## Requisitos
 
 - Node.js 18+ (usa `import()` dinámico de ESM desde CommonJS).
-- Una API key de Gemini en un archivo `.env` (ver abajo).
+- Una API key de Gemini en un archivo `.env` (ver abajo). La de **Groq es opcional**:
+  si falta, el motor se omite de las cadenas sin romper nada.
 
 ## Cómo levantar
 
@@ -32,7 +38,7 @@ npm install
 
 # 2) variables de entorno
 cp .env.example .env      # en Windows: copy .env.example .env
-#   completá GEMINI_API_KEY
+#   completá GEMINI_API_KEY (y, opcional, GROQ_API_KEY)
 
 # 3) servidor
 npm start        # o: npm run dev   (nodemon, recarga automática)
@@ -49,28 +55,39 @@ también se puede abrir con `file://` porque el backend tiene CORS abierto.)
 | Variable | Por defecto | Para qué |
 |---|---|---|
 | `GEMINI_API_KEY` | — (**obligatoria**) | Credencial de Gemini |
+| `GROQ_API_KEY` | — (opcional) | Credencial de Groq; sin ella, el motor se omite |
 | `PORT` | `3000` | Puerto del servidor |
 | `GEMINI_MODEL` | `gemini-3.8-flash` | Modelo de texto del **scoring** (batch) |
-| `GEMINI_SUGGEST_MODELS` | `GEMINI_SUGGEST_MODEL` + respaldos | Cadena de modelos de **Autocompletar** (orden de preferencia) |
-| `GEMINI_CHAT_MODELS` | `GEMINI_CHAT_MODEL` + respaldos | Cadena de modelos del **chat** |
-| `GEMINI_SCORING_MODELS` | `GEMINI_MODEL` + respaldos | Cadena de modelos del **scoring** |
+| `AI_SUGGEST_MODELS` | Groq + respaldos Gemini | Cadena de motores de **Autocompletar** (orden de preferencia) |
+| `AI_CHAT_MODELS` | Groq + respaldos Gemini | Cadena de motores del **chat** |
+| `AI_SCORING_MODELS` | Gemini + Groq al final | Cadena de motores del **scoring** |
 | `GEMINI_SUGGEST_MODEL` / `GEMINI_CHAT_MODEL` | `GEMINI_MODEL` | Modelo único de cada tarea (si no hay cadena `*_MODELS`) |
-| `GEMINI_EMBED_MODEL` | `gemini-embedding-001` | Modelo de embeddings |
-| `GEMINI_THINKING_LEVEL_{SUGGEST,CHAT,SCORING}` | `low`, `low`, `high` | Razonamiento de Gemini 3 (`low` = más rápido) |
+| `GEMINI_EMBED_MODEL` | `gemini-embedding-001` | Modelo de embeddings (siempre Gemini) |
+| `AI_PDF_MODE` | `auto` | `auto` = extrae texto local (y PDF nativo si es escaneado); `pdf` = siempre nativo |
+| `GEMINI_THINKING_LEVEL_{SUGGEST,CHAT,SCORING}` | `low`, `low`, `high` | Razonamiento de Gemini 3 (`low` = más rápido); Groq lo ignora |
 | `AI_REQUEST_TIMEOUT_MS` | `45000` | Corte por intento contra la IA (ms) |
 | `AI_TOTAL_TIMEOUT_MS` | `120000` | Tope total por consulta/CV, sumando intentos (ms) |
 | `AI_FAILOVER_ROUNDS` | `2` | Vueltas a la cadena antes de rendirse |
-| `AI_MODEL_COOLDOWN_MS` | `45000` | Enfriamiento de un modelo que falló (circuit breaker) |
-| `AI_SAME_MODEL_RETRIES` | `1` | Reintentos del mismo modelo ante 429 por minuto |
-| `AI_QUOTA_SWITCH_SECONDS` | `60` | RetryDelay desde el que se considera cuota agotada (salta de modelo) |
+| `AI_MODEL_COOLDOWN_MS` | `45000` | Enfriamiento de un motor que falló (circuit breaker) |
+| `AI_SAME_MODEL_RETRIES` | `1` | Reintentos del mismo motor ante 429 por minuto |
+| `AI_QUOTA_SWITCH_SECONDS` | `60` | RetryDelay desde el que se considera cuota agotada (salta de motor) |
 | `GEMINI_RETRIES_{INTERACTIVE,BATCH}` | `2`, `3` | Reintentos de **embeddings** ante 503/429 |
 
-**Failover de modelos:** si el primero de la cadena está saturado (`503`), tiene la
+> Los nombres viejos `GEMINI_{SUGGEST,CHAT,SCORING}_MODELS` siguen leyéndose si no hay
+> `AI_*_MODELS`. Cada entrada de cadena es `modelo` (Gemini) o `proveedor:modelo`
+> (p. ej. `groq:openai/gpt-oss-120b`).
+
+**Failover de motores:** si el primero de la cadena está saturado (`503`), tiene la
 cuota diaria agotada (`429`), fue retirado (`404`) o se corta la conexión, se pasa
 al siguiente **sin cortar la consulta**. Un `401/403/400` es fatal y no se reintenta.
-Un modelo que falla se enfría (pasa al final de la cadena) durante `AI_MODEL_COOLDOWN_MS`.
-La cadena por defecto termina en `gemini-3.1-flash-lite`, cuyo bucket diario es
-independiente del de la familia 3.5/3.6/3.8 (sobrevive si ese cupo se agota).
+Un motor que falla se enfría (pasa al final de la cadena) durante `AI_MODEL_COOLDOWN_MS`.
+Un pedido que lleva el **PDF adjunto** saltea los motores que no leen PDF (Groq): el
+orquestador filtra por capacidad. La cadena de Gemini termina en `gemini-3.1-flash-lite`,
+cuyo bucket diario es independiente del de la familia 3.5/3.6/3.8.
+
+**CVs escaneados:** si el PDF no tiene capa de texto, se manda el PDF nativo y lo
+tiene que leer Gemini (único con visión). Si además Gemini está sin cuota, el CV
+queda pendiente con un aviso claro (*"…necesita el motor con visión…"*).
 
 ## Endpoints
 
@@ -107,13 +124,20 @@ backend/src/
     jobs.routes.js          # vacantes + upload + analizar + ranking + chat
     chat.routes.js          # chat "suelto" de la plantilla original (se conserva)
   services/
-    gemini.service.js       # cliente Gemini: generateContent + embedContent
+    ai.service.js           # orquestador: cadena de motores, failover, streaming
+    providers/
+      gemini.js             # motor Gemini (texto + PDF) y embeddings
+      openaiCompat.js       # motor compatible con OpenAI (Groq/OpenRouter)
+      index.js              # registro de motores según credenciales
+    pdfText.js              # extrae el texto del PDF y reordena columnas
     scoring.service.js      # scoring de CVs y armado del ranking/KPIs
     retrieval.service.js    # embeddings + similitud coseno
     chat.service.js         # RAG: recuperar + armar contexto + responder
     store.service.js        # persistencia en JSON (escritura atómica)
   prompts/                  # system prompts y esquema JSON del scoring
   data/                     # jobs.json + cvs/*.pdf  (generado en runtime, gitignored)
+
+backend/test/               # tests (node:test) + fixtures PDF
 
 frontend/
   index.html                # SPA con 3 vistas (Vacantes, Ranking, Chat)

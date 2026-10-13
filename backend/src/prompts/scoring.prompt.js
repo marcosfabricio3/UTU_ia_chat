@@ -6,7 +6,7 @@ puntuación objetiva y justificada que ayude a priorizar candidatos.
 
 CONTEXTO:
 - Recibís la descripción y los requisitos de la vacante.
-- Recibís el CV del candidato (en PDF).
+- Recibís el CV del candidato (como PDF o como texto extraído del PDF).
 - Debés basarte ÚNICAMENTE en la información del CV y de la vacante.
 
 ESTILO:
@@ -48,4 +48,19 @@ const SCORE_SCHEMA = {
   ],
 };
 
-module.exports = { SYSTEM_INSTRUCTION, SCORE_SCHEMA };
+module.exports = { SYSTEM_INSTRUCTION, SCORE_SCHEMA, buildScoreSchema };
+
+// Esquema de scoring. Si el texto del CV lo extraemos nosotros (motor de texto),
+// se omite `texto_extraido`: es un campo que solo tiene sentido pedirle al motor
+// que leyó el PDF nativo, y ahorra tokens de salida.
+function buildScoreSchema({ withExtractedText }) {
+  if (withExtractedText) return SCORE_SCHEMA;
+
+  const properties = { ...SCORE_SCHEMA.properties };
+  delete properties.texto_extraido;
+  return {
+    type: SCORE_SCHEMA.type,
+    properties,
+    required: SCORE_SCHEMA.required.filter((k) => k !== "texto_extraido"),
+  };
+}

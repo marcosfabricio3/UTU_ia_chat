@@ -59,50 +59,83 @@ El problema tiene tres características que **descartan una solución clásica p
 En resumen: la IA no reemplaza al reclutador, **absorbe el trabajo repetitivo y lo hace consistente y auditable**, liberando tiempo humano para las decisiones que realmente requieren criterio.
 
 ### 2.3 Alcance
-- **Dentro del alcance:** CVs en PDF con **texto digital** (no escaneados a imagen), evaluación contra un perfil de puesto, chat de consulta sobre el lote.
-- **Fuera del alcance (trabajo futuro):** OCR de PDFs escaneados, integración con un ATS real, autenticación de usuarios.
+- **Dentro del alcance:** CVs en PDF con **texto digital** —incluidos los de **dos columnas**, que el backend detecta y **reordena**—; evaluación contra un perfil de puesto; chat de consulta sobre el lote.
+- **Fuera del alcance (trabajo futuro):** OCR de PDFs escaneados como imagen (aunque, como red de seguridad, un CV escaneado se envía igual al motor con visión), integración con un ATS real, autenticación de usuarios.
 
 ---
 
 ## 3. Desarrollo e integración del modelo LLM
 
-### 3.1 Plataforma y modelo elegido
-Se utilizó la **API de Google Gemini** mediante el SDK oficial **`@google/genai`** (JavaScript/Node.js). Se eligió por:
-- **Soporte de PDF nativo:** permite enviar el PDF **directamente** al modelo, sin librerías de parseo intermedias.
-- **Salida estructurada (JSON) garantizada:** mediante esquema (`responseSchema`), lo que hace la respuesta **programable** (se usa directo en el ranking).
-- **Embeddings** en el mismo proveedor, lo que simplifica el RAG.
-- **Costo/latencia** adecuados y disponibilidad de una capa gratuita para el desarrollo.
+### 3.1 Plataforma y modelos elegidos
+Se utilizan **dos motores de IA** con **failover** entre ellos, coordinados por un
+orquestador (`backend/src/services/ai.service.js`):
 
-Modelos configurados (en `backend/src/config.js`, ajustables por `.env`):
+- **Google Gemini** (SDK oficial **`@google/genai`**): único motor con **visión**,
+  por lo que es el que **lee el PDF nativo**; además provee los **embeddings** del RAG.
+- **Groq** (API **compatible con OpenAI**): motor de **texto** con una cuota diaria
+  mucho más amplia (1.000 req/día). Recibe el **texto extraído localmente** del PDF.
+
+Por qué dos motores: la capa gratuita de Gemini tiene un cupo **diario por modelo**
+muy chico (~20 req/día), insuficiente para una demo con muchos CVs. Groq aporta
+**volumen** para las tareas interactivas, y Gemini queda para lo que solo él sabe
+hacer: **leer PDF** (CVs escaneados) y **generar embeddings**.
+
+**Extracción local del texto (`backend/src/services/pdfText.js`).** Antes de llamar
+a la IA, el backend extrae el texto del PDF con **`pdfjs-dist`** (que expone la
+**posición** de cada fragmento). Eso permite **detectar y reordenar columnas**: un
+CV a dos columnas se lee **izquierda completa y después derecha**, en vez de
+**entreverado** línea por línea. Si el PDF **no tiene capa de texto** (escaneado),
+se manda el **PDF nativo** y lo resuelve Gemini. El texto extraído se usa además
+para el **embedding** del chat (RAG), sin depender del motor que puntuó.
+
+Modelos configurados (en `backend/src/config.js`, ajustables por `.env`). Cada
+entrada es `modelo` (Gemini) o `proveedor:modelo`:
 
 | Uso | Variable | Cadena por defecto | Detalle |
 |---|---|---|---|
-| Scoring (batch) | `GEMINI_SCORING_MODELS` | `gemini-3.8-flash` → `3.5-flash` → `3.5-flash-lite` → `3.1-flash-lite` | Texto + lectura de PDF |
-| Chat (interactivo) | `GEMINI_CHAT_MODELS` | `GEMINI_CHAT_MODEL` + respaldos (ídem scoring) | Razonamiento `low` |
-| Autocompletar | `GEMINI_SUGGEST_MODELS` | `GEMINI_SUGGEST_MODEL` + respaldos (ídem scoring) | El más liviano/rápido |
+| Chat (interactivo) | `AI_CHAT_MODELS` | `groq:openai/gpt-oss-120b` → `gemini-3.8-flash` → `3.5-flash-lite` → `3.1-flash-lite` | Groq primero (volumen), Gemini de respaldo |
+| Autocompletar | `AI_SUGGEST_MODELS` | `groq:openai/gpt-oss-20b` → `gemini-3.5-flash-lite` → `3.1-flash-lite` | El más liviano/rápido |
+| Scoring (batch) | `AI_SCORING_MODELS` | `gemini-3.8-flash` → `3.5-flash` → `3.5-flash-lite` → `3.1-flash-lite` → `groq:openai/gpt-oss-120b` | Gemini primero (calidad + visión); Groq al final (solo texto) |
 | Embeddings (RAG) | `GEMINI_EMBED_MODEL` | `gemini-embedding-001` | Vectores de **768** dimensiones (`outputDimensionality`) |
 
-Cada tarea define una **cadena** de modelos (en orden de preferencia): si el primero está
-**saturado (503)**, con la **cuota diaria agotada (429)** o fue **retirado (404)**, se pasa al
-siguiente **sin cortar la consulta** (`401/403/400` son fatales). La cadena combina **familias y
-buckets distintos** (los alias de una misma familia comparten cuota): `3.1-flash-lite` va al final
-porque su **bucket diario es independiente** del de la familia 3.5/3.6/3.8, de modo que la IA
-sigue respondiendo aun cuando el cupo "flash" se agotó. Un modelo que falla se **enfría** (pasa al
-final de la cadena) por un rato; en streaming, si el corte ocurre a mitad de la respuesta, el
-frontend vacía la burbuja y avisa. Detalle en `docs/PENDIENTES - CVlight.md` §2.11.
+Cada tarea define una **cadena** de motores (en orden de preferencia): si el primero
+está **saturado (503)**, con la **cuota diaria agotada (429)**, fue **retirado (404)**
+o se **cortó la conexión**, se pasa al siguiente **sin cortar la consulta**
+(`401/403/400` son fatales). Un pedido que lleva el **PDF adjunto** **saltea** los
+motores que no leen PDF (Groq): el orquestador **filtra por capacidad** según el
+tipo de contenido. La cadena de Gemini combina **familias y buckets distintos** (los
+alias de una misma familia comparten cuota): `3.1-flash-lite` va al final porque su
+**bucket diario es independiente** del de la familia 3.5/3.6/3.8, de modo que la IA
+sigue respondiendo aun cuando el cupo "flash" se agotó. Un motor que falla se
+**enfría** (pasa al final de la cadena) por un rato; en streaming, si el corte ocurre
+a mitad de la respuesta, el frontend vacía la burbuja y avisa. Detalle en
+`docs/PENDIENTES - CVlight.md` §2.11 y §2.12.
 
 > **Latencia.** Las tareas interactivas (Autocompletar y chat) usan un modelo más liviano y
 > `thinkingConfig.thinkingLevel: "low"`; el scoring prioriza calidad (`high`). Los pedidos
 > tienen **timeout** por intento y **reintentos** acotados, y el chat responde por **streaming (SSE)**.
 > El detalle está en `docs/PENDIENTES - CVlight.md` §2.10.
 
-### 3.2 Integración 1 — Lectura de PDF directo
-El CV **no se convierte a texto con una librería**: se envía el archivo a Gemini como **datos en línea** (`inlineData` con `mimeType: application/pdf`). El modelo lo lee e interpreta directamente. Esto reduce dependencias y errores de extracción.
+### 3.2 Integración 1 — Lectura del CV (extracción local + PDF nativo de respaldo)
+En vez de depender solo de la lectura del PDF por parte del modelo, primero se intenta
+**extraer el texto localmente** con `pdfjs-dist` (que da la **posición** de cada
+fragmento). Esto permite **reordenar columnas** y mandar **texto** a cualquier motor
+(incluido Groq). Si el PDF **no tiene capa de texto** (escaneado), se cae al **PDF
+nativo** (`inlineData`), que solo sabe leer el motor con visión (Gemini).
 
 ```js
-// backend/src/services/gemini.service.js (extracto)
-const data = fs.readFileSync(f.path).toString("base64");
-contents.push({ inlineData: { data, mimeType: f.mimeType } }); // application/pdf
+// backend/src/services/scoring.service.js (extracto)
+const extracted = await extractPdf(cv.path, { mode: pdfMode });   // pdfText.js
+const usingPdf = extracted.payload === "pdf";
+const text = await generateResponse(
+  usingPdf ? buildPdfMessage(job) : buildTextMessage(job, extracted.text),
+  {
+    responseSchema: buildScoreSchema({ withExtractedText: usingPdf }),
+    files: usingPdf ? [{ path: cv.path, mimeType: "application/pdf" }] : undefined,
+    models: modelChains.scoring,
+    // ...
+  }
+);
 ```
 
 ### 3.3 Integración 2 — Salida estructurada (JSON)
@@ -134,7 +167,12 @@ backend/src/
     jobs.routes.js          # vacantes + upload de CVs + analizar + ranking + chat
     chat.routes.js          # chat "suelto" de la plantilla original (se conserva)
   services/
-    gemini.service.js       # cliente Gemini: generateContent + embedContent
+    ai.service.js           # orquestador: cadena de motores, failover, streaming
+    providers/
+      gemini.js             # motor Gemini (texto + PDF) y embeddings
+      openaiCompat.js       # motor compatible con OpenAI (Groq/OpenRouter)
+      index.js              # registro de motores según credenciales
+    pdfText.js              # extrae el texto del PDF y reordena columnas
     scoring.service.js      # scoring de CVs y armado del ranking/KPIs
     retrieval.service.js    # embeddings + similitud coseno
     chat.service.js         # RAG: recuperar + armar contexto + responder
@@ -171,7 +209,7 @@ El modelado del comportamiento del LLM es la parte central del proyecto. Se defi
 
 > **Rol:** reclutador técnico senior con más de 10 años de experiencia evaluando candidatos.
 > **Objetivo:** medir qué tan bien encaja un CV con una vacante concreta y devolver una puntuación objetiva y justificada que ayude a priorizar.
-> **Contexto:** descripción y requisitos de la vacante + el CV en PDF. Debe basarse **únicamente** en esa información.
+> **Contexto:** descripción y requisitos de la vacante + el CV (como texto extraído o PDF nativo). Debe basarse **únicamente** en esa información.
 > **Estilo:** objetivo, profesional y conciso; español, tercera persona; sin adornos ni opiniones subjetivas.
 > **Restricciones (obligatorias):**
 > - **No** usar ni mencionar edad, género, nacionalidad, estado civil, religión, foto ni datos personales no relacionados con el puesto.
@@ -196,7 +234,7 @@ El modelado del comportamiento del LLM es la parte central del proyecto. Se defi
 }
 ```
 
-El campo `texto_extraido` cumple una doble función: además de documentar el contenido leído, es el texto que luego se convierte en **embedding** para el chat RAG.
+El campo `texto_extraido` cumple una doble función: además de documentar el contenido leído, es el texto que luego se convierte en **embedding** para el chat RAG. Cuando el CV se procesó por **texto** (extracción local), ese texto lo **aporta el backend** y `texto_extraido` se **quita del esquema** que se le pide al modelo (ahorra tokens); solo se le pide al modelo cuando **él** leyó el PDF nativo (escaneado).
 
 ### 4.2 Prompt de CHAT (RAG)
 
@@ -233,7 +271,7 @@ Este es un punto transversal del diseño, **explícito en ambos prompts**:
 |---|---|
 | 0:00–1:00 | **Problema:** Talento Humano S.A. y el filtrado manual de CVs. |
 | 1:00–2:30 | **Solución:** qué es CVlight y por qué la IA es la herramienta correcta (matching semántico vs. palabras clave). |
-| 2:30–4:00 | **Uso de IA + LLM:** Gemini, PDF directo, salida JSON, embeddings/RAG. |
+| 2:30–4:00 | **Uso de IA + LLM:** dos motores (Gemini + Groq), extracción de texto y reordenamiento de columnas, salida JSON, embeddings/RAG. |
 | 4:00–6:00 | **Diseño del prompt:** recorrer las 6 partes y destacar las restricciones éticas. |
 | 6:00–9:00 | **DEMO en vivo.** |
 | 9:00–10:00 | **Cierre:** limitaciones y trabajo futuro. |
@@ -250,7 +288,8 @@ Este es un punto transversal del diseño, **explícito en ambos prompts**:
    - Mostrar la línea **"Fuentes:"** (trazabilidad).
 
 ### 5.3 Posibles preguntas y respuestas
-- **"¿Y si el CV está escaneado (imagen)?"** → Fuera de alcance; requeriría OCR. El sistema asume PDF con texto.
+- **"¿Y si el CV está escaneado (imagen)?"** → El backend no le puede extraer texto, así que lo manda **entero** al motor con **visión** (Gemini). Si ese motor está sin cuota, el CV queda pendiente con un aviso claro. El **OCR como tal** sigue fuera de alcance.
+- **"¿Y si el CV está a dos columnas?"** → El extractor detecta el **pasillo** entre columnas y **reordena** (izquierda completa, después derecha), en vez de entreverar las líneas. Hay pruebas con PDFs sintéticos de una y dos columnas.
 - **"¿No es riesgoso que la IA decida?"** → No decide: **ordena y explica**; la decisión es humana (human-in-the-loop), y hay reglas anti-sesgo y trazabilidad.
 - **"¿Por qué no una base de datos / buscador por palabras clave?"** → Porque el texto es heterogéneo y el problema es de **significado**, no de coincidencia literal.
 
@@ -281,10 +320,26 @@ El ranking **distingue claramente** perfiles fuertes de débiles, y cada puntaje
 | Comportamiento ético (intento de averiguar edad) | ✅ Se niega a usar datos sensibles |
 | Multi-turno (con historial) | ✅ Usa el contexto previo de la conversación |
 
+### 6.3 Segundo motor y extracción de texto (pruebas automatizadas)
+Se agregaron pruebas con `node:test` (`cd backend && npm test`), sin tocar la red (se
+intercepta `fetch`):
+
+| Prueba | Resultado |
+|---|---|
+| PDF a dos columnas | ✅ Se extrae **reordenado** (izquierda → derecha), sin entreverar |
+| PDF de una columna con fechas a la derecha | ✅ **No** se confunde con dos columnas |
+| PDF escaneado (sin capa de texto) | ✅ Se pide el **PDF nativo** (payload `pdf`) |
+| Failover por saturación (503 → siguiente) | ✅ Responde el segundo motor |
+| Error fatal (401) | ✅ No se reintenta ni se salta de motor |
+| 429 por minuto vs. cuota diaria | ✅ Reintenta el mismo vs. salta al siguiente |
+| Pedido con PDF y cadena de solo texto | ✅ **Saltea** el motor sin visión |
+| Streaming que falla a mitad | ✅ Emite `restart` (vaciar burbuja) y sigue |
+
 ---
 
 ## 7. Limitaciones y trabajo futuro
-- **OCR:** hoy solo procesa PDFs con texto digital.
+- **OCR:** para PDFs escaneados no hay OCR propio; se delega en la visión del motor (Gemini), que requiere cuota.
+- **Detección de columnas:** el heurístico de proyección cubre el caso típico (una o dos columnas con pasillo angosto); layouts muy irregulares podrían caer al PDF nativo.
 - **Escala:** la recuperación por similitud coseno es suficiente para decenas/cientos de CVs; a mayor escala convendría una **base vectorial** (pgvector, FAISS) y una base de datos transaccional.
 - **Evaluación del propio modelo:** se podría medir la calidad del scoring contra un conjunto de CVs con puntajes esperados (validación humana).
 - **Multiusuario:** falta autenticación y separación de datos por reclutador.
@@ -298,7 +353,7 @@ El ranking **distingue claramente** perfiles fuertes de débiles, y cada puntaje
 # 1) Backend
 cd backend
 npm install
-# Crear .env con: GEMINI_API_KEY=... (ver .env.example)
+# Crear .env con: GEMINI_API_KEY=... y (opcional) GROQ_API_KEY=... (ver .env.example)
 npx nodemon src/app.js          # servidor en http://localhost:3000
 
 # 2) CVs de ejemplo (opcional)
