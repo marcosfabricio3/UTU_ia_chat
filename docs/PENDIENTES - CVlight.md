@@ -320,9 +320,11 @@ $env:GEMINI_MODEL="gemini-3.5-flash"; node src/app.js
   eso cortaba la consulta. Ahora, si un modelo falla, se **prueba automáticamente con el siguiente**
   y el usuario no ve el error: la respuesta sale igual (con otro modelo).
 - **Clasificación del error** (`classifyAiError`, `services/aiErrors.js`):
-  - `retry-same` — **429 por minuto**: se espera y se reintenta el **mismo** modelo.
+  - `retry-same` — **429 por minuto** y **caídas de conexión** (sin respuesta HTTP): se espera
+    y se reintenta el **mismo** modelo. Reintentar el mismo motor evita que un corte de red
+    local (p. ej. un proxy de TLS intermitente) gaste la cuota del motor de respaldo.
   - `next-model` — **503** (saturado), **429 por día** (cuota diaria), **404** (modelo retirado),
-    cortes de red y **cualquier error sin código**. Pasa al siguiente modelo.
+    **5xx**, **402** y **cualquier error con código** no contemplado arriba. Pasa al siguiente modelo.
   - `fatal` — **400/401/403/422**: no se reintenta (se informa el error).
 - **Cadena por tarea** (`config.js`): `AI_{SUGGEST,CHAT,SCORING}_MODELS` (lista separada por
   comas, en orden de preferencia; los nombres viejos `GEMINI_*_MODELS` siguen leyéndose). Por
@@ -386,10 +388,20 @@ $env:GEMINI_MODEL="gemini-3.5-flash"; node src/app.js
 - **Límite duro:** CV **escaneado + Gemini sin cuota** = no hay con quién leerlo; la UI avisa
   *"Este CV es escaneado (o su layout no se pudo leer como texto) y necesita el motor con visión,
   que ahora no está disponible."* y queda pendiente para reintentar.
-- **Verificado.** 13 tests `node:test` (`cd backend && npm test`): reordenamiento de columnas,
+- **Verificado — tests (15 `node:test`, `cd backend && npm test`).** Reordenamiento de columnas,
   no-falso-positivo de fechas, escaneado→`pdf`, failover 503/401/429(min/día), **salteo de motores
-  sin visión**, y streaming con `restart`/`notice`. Falta el **smoke real contra Groq** (requiere
-  `GROQ_API_KEY`).
+  sin visión**, streaming con `restart`/`notice`, y **caída de conexión → reintenta el mismo motor**.
+- **Verificado — smoke real con Groq (13/10, con `GROQ_API_KEY`).**
+  - **Generación** (`openai/gpt-oss-120b`), **streaming** (33 `delta`) y **schema JSON del scoring**
+    (`openai/gpt-oss-20b`): score 70, skills `React+JavaScript+TypeScript`. Todo OK.
+  - **Failover cruzado real:** modelo Groq inexistente (**404**) → cae a **`gemini-3.1-flash-lite`**;
+    ese Gemini devolvió **503** en su primer intento y la **ronda 2** lo recuperó (respuesta a los
+    27 s). Ninguna consulta se cortó.
+  - **Nota de entorno.** En esta máquina hay un **proxy que inspecciona HTTPS** (antivirus) que
+    ~1 de cada 10 conexiones presenta un certificado no confiable (`SELF_SIGNED_CERT_IN_CHAIN`),
+    lo que da `fetch failed` sin código. Se maneja como **reintento del mismo motor** (arriba). Si
+    molesta, se agrega el certificado del proxy con `NODE_EXTRA_CA_CERTS` o se desactiva el escaneo
+    de HTTPS del antivirus.
 
 ---
 

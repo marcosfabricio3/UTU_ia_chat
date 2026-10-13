@@ -184,3 +184,44 @@ test("esquema no soportado (400 de response_format): reintenta sin el esquema", 
   assert.ok(primerBody.response_format, "el primer intento sí lleva el esquema");
   assert.strictEqual(segundoBody.response_format, undefined, "el reintento va sin esquema");
 });
+
+test("caída de conexión: reintenta el MISMO motor antes de saltar", async () => {
+  let aCalls = 0;
+  let bCalls = 0;
+  handler = (body) => {
+    if (body.model === "net-a") {
+      aCalls++;
+      if (aCalls === 1) throw new TypeError("fetch failed"); // corte de red
+      return textResponse("A");
+    }
+    bCalls++;
+    return textResponse("B");
+  };
+  const out = await generateResponse("x", {
+    models: [{ provider: "groq", model: "net-a" }, { provider: "groq", model: "net-b" }],
+  });
+  assert.strictEqual(out, "A", "gana el mismo motor tras el reintento");
+  assert.strictEqual(aCalls, 2);
+  assert.strictEqual(bCalls, 0, "no debe saltar de motor por un corte transitorio");
+});
+
+test("stream: caída de conexión antes de emitir → reintenta el mismo motor", async () => {
+  let aCalls = 0;
+  handler = (body) => {
+    if (body.model === "snet-a") {
+      aCalls++;
+      if (aCalls === 1) throw new TypeError("fetch failed");
+      return sseResponse([deltaChunk("A"), "data: [DONE]\n\n"]);
+    }
+    return sseResponse([deltaChunk("B"), "data: [DONE]\n\n"]);
+  };
+  const events = await collect(
+    generateResponseStream("hola", {
+      models: [{ provider: "groq", model: "snet-a" }, { provider: "groq", model: "snet-b" }],
+    })
+  );
+  const deltas = events.filter((e) => e.type === "delta").map((e) => e.text);
+  assert.deepEqual(deltas, ["A"]);
+  assert.strictEqual(aCalls, 2);
+  assert.ok(!events.some((e) => e.type === "notice"), "no debería saltar de motor");
+});

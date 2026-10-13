@@ -179,7 +179,9 @@ async function generateResponse(message, opts = {}) {
         if (action === "retry-same" && sameRetries < aiSameModelRetries) {
           sameRetries++;
           const wait = 800 * sameRetries;
-          console.warn(`[ai:${label}] ${key} limitado por minuto; reintento en ${wait}ms`);
+          console.warn(
+            `[ai:${label}] ${key} error transitorio (status ${statusOf(error) || "red"}); reintento en ${wait}ms`
+          );
           await sleep(wait);
           continue;
         }
@@ -231,41 +233,59 @@ async function* generateResponseStream(message, opts = {}) {
 
     const provider = getProvider(entry.provider);
     let emittedHere = false;
+    let sameRetries = 0;
 
-    try {
-      const iterator = provider.stream(entry.model, req)[Symbol.asyncIterator]();
-      let step;
-      for (;;) {
-        step = await iterator.next();
-        if (step.done) break;
-        const piece = step.value && step.value.text;
-        if (piece) {
-          emittedHere = true;
-          alreadyEmitted = true;
-          yield { type: "delta", text: piece };
+    // Reintentos del MISMO motor (429 por minuto o caída de conexión) mientras no se
+    // haya emitido texto: si ya hay texto, reintentar duplicaría la respuesta.
+    for (;;) {
+      if (Date.now() - started >= aiTotalTimeoutMs) break;
+      emittedHere = false;
+      try {
+        const iterator = provider.stream(entry.model, req)[Symbol.asyncIterator]();
+        let step;
+        for (;;) {
+          step = await iterator.next();
+          if (step.done) break;
+          const piece = step.value && step.value.text;
+          if (piece) {
+            emittedHere = true;
+            alreadyEmitted = true;
+            yield { type: "delta", text: piece };
+          }
         }
-      }
-      logOk(label, step.value, Date.now() - started, key);
-      return;
-    } catch (error) {
-      lastError = error;
-      const action = classifyAiError(error);
-      if (action === "fatal") {
-        logFail(label, error, Date.now() - started, key);
-        throw error;
-      }
+        logOk(label, step.value, Date.now() - started, key);
+        return;
+      } catch (error) {
+        lastError = error;
+        const action = classifyAiError(error);
+        if (action === "fatal") {
+          logFail(label, error, Date.now() - started, key);
+          throw error;
+        }
 
-      coolModel(key, label);
-      console.warn(`[ai:${label}] ${key} falló (status ${statusOf(error) || "?"}); paso al siguiente motor.`);
+        if (action === "retry-same" && !emittedHere && sameRetries < aiSameModelRetries) {
+          sameRetries++;
+          const wait = 800 * sameRetries;
+          console.warn(
+            `[ai:${label}] ${key} error transitorio (status ${statusOf(error) || "red"}); reintento en ${wait}ms`
+          );
+          await sleep(wait);
+          continue;
+        }
 
-      if (emittedHere && hasMore) {
-        yield {
-          type: "restart",
-          model: key,
-          message: "Se cortó la respuesta a mitad; reinicio con otro modelo.",
-        };
-      } else if (!alreadyEmitted && hasMore) {
-        yield { type: "notice", message: "El modelo estaba ocupado; probando otro…" };
+        coolModel(key, label);
+        console.warn(`[ai:${label}] ${key} falló (status ${statusOf(error) || "?"}); paso al siguiente motor.`);
+
+        if (emittedHere && hasMore) {
+          yield {
+            type: "restart",
+            model: key,
+            message: "Se cortó la respuesta a mitad; reinicio con otro modelo.",
+          };
+        } else if (!alreadyEmitted && hasMore) {
+          yield { type: "notice", message: "El modelo estaba ocupado; probando otro…" };
+        }
+        break;
       }
     }
   }

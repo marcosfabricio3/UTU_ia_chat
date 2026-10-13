@@ -32,6 +32,20 @@ function retryDelaySeconds(error) {
   return null;
 }
 
+// Error de CONEXIÓN: no llegó a haber respuesta HTTP (sin status). Ejemplos: DNS,
+// TLS rechazado por un proxy que inspecciona HTTPS, conexión reseteada, `fetch failed`.
+// Son transitorios: conviene reintentar el MISMO motor antes de saltar a otro, porque
+// saltar por un problema de red local gastaría la cuota del motor de respaldo.
+function isConnectionError(error) {
+  if (statusOf(error)) return false;
+  if (error && error.name === "TypeError") return true; // undici: "fetch failed"
+  const cause = (error && error.cause && error.cause.code) || "";
+  const msg = String((error && error.message) || "");
+  return /fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|SELF_SIGNED_CERT|UNABLE_TO_VERIFY|CERT_|socket hang up/i.test(
+    `${msg} ${cause}`
+  );
+}
+
 // ¿El 429 es por cuota diaria agotada (no se destraba esperando)?
 function isDailyQuota(error) {
   const m = String((error && error.message) || "");
@@ -48,8 +62,11 @@ function classifyAiError(error) {
   const status = statusOf(error);
   if (status === 429) return isDailyQuota(error) ? "next-model" : "retry-same";
   if (status === 400 || status === 401 || status === 403 || status === 422) return "fatal";
-  // 402 (sin saldo), 404 (modelo retirado), 5xx, cortes de red y errores sin
-  // código: probar otro modelo. Es el caso por defecto.
+  // Un problema de conexión (sin respuesta HTTP) se reintenta en el mismo motor un
+  // par de veces antes de saltar: suele ser un corte transitorio de red/TLS.
+  if (isConnectionError(error)) return "retry-same";
+  // 402 (sin saldo), 404 (modelo retirado), 5xx y errores sin código: probar otro
+  // modelo. Es el caso por defecto.
   return "next-model";
 }
 
