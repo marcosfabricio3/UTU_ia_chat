@@ -9,9 +9,6 @@ node_modules/
 # Datos generados en tiempo de ejecucion (vacantes, CVs, vectores, jobs.json)
 backend/src/data/
 
-# Evidencia de UI (capturas locales, ~7 MB: se conservan en disco pero no se versionan)
-docs/capturas/
-
 # Temporales y backups (incluye jobs.json.tmp de la escritura atomica)
 *.tmp
 *.bak
