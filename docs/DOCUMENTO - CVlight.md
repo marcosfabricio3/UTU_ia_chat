@@ -109,13 +109,11 @@ alias de una misma familia comparten cuota): `3.1-flash-lite` va al final porque
 **bucket diario es independiente** del de la familia 3.5/3.6/3.8, de modo que la IA
 sigue respondiendo aun cuando el cupo "flash" se agotó. Un motor que falla se
 **enfría** (pasa al final de la cadena) por un rato; en streaming, si el corte ocurre
-a mitad de la respuesta, el frontend vacía la burbuja y avisa. Detalle en
-`docs/PENDIENTES - CVlight.md` §2.11 y §2.12.
+a mitad de la respuesta, el frontend vacía la burbuja y avisa.
 
 > **Latencia.** Las tareas interactivas (Autocompletar y chat) usan un modelo más liviano y
 > `thinkingConfig.thinkingLevel: "low"`; el scoring prioriza calidad (`high`). Los pedidos
 > tienen **timeout** por intento y **reintentos** acotados, y el chat responde por **streaming (SSE)**.
-> El detalle está en `docs/PENDIENTES - CVlight.md` §2.10.
 
 ### 3.2 Integración 1 — Lectura del CV (extracción local + PDF nativo de respaldo)
 En vez de depender solo de la lectura del PDF por parte del modelo, primero se intenta
@@ -360,7 +358,7 @@ npm install
 npx nodemon src/app.js          # servidor en http://localhost:3000
 
 # 2) CVs de ejemplo (opcional)
-python scripts/generar_cvs.py    # genera 5 PDFs en sample-cvs/
+#    Usá los PDFs de cvs-ejemplo/ desde la interfaz.
 ```
 
 ### 8.2 Definición de la empresa ficticia
