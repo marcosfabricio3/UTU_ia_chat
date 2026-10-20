@@ -119,29 +119,33 @@ para no agotar la cuota de la IA.
 ## Estructura
 
 ```
-backend/src/
-  app.js                    # servidor Express, CORS, estáticos, manejo de errores
-  config.js                 # carga el .env y expone puerto y modelos
-  middleware/
-    rate-limit.js           # limitador de peticiones en memoria
-  routes/
-    jobs.routes.js          # vacantes + upload + analizar + ranking + chat
-    chat.routes.js          # chat "suelto" de la plantilla original (se conserva)
-  services/
-    ai.service.js           # orquestador: cadena de motores, failover, streaming
-    providers/
-      gemini.js             # motor Gemini (texto + PDF) y embeddings
-      openaiCompat.js       # motor compatible con OpenAI (Groq/OpenRouter)
-      index.js              # registro de motores según credenciales
-    pdfText.js              # extrae el texto del PDF y reordena columnas
-    scoring.service.js      # scoring de CVs y armado del ranking/KPIs
-    retrieval.service.js    # embeddings + similitud coseno
-    chat.service.js         # RAG: recuperar + armar contexto + responder
-    store.service.js        # persistencia en JSON (escritura atómica)
-  prompts/                  # system prompts y esquema JSON del scoring
-  data/                     # jobs.json + cvs/*.pdf  (generado en runtime, gitignored)
-
-backend/test/               # tests (node:test) + fixtures PDF
+backend/
+  package.json              # dependencias y scripts (start / dev / test)
+  .env.example              # variables de entorno de ejemplo (copiar a .env)
+  nodemon.json              # recarga automática en desarrollo
+  src/
+    app.js                  # servidor Express, CORS, estáticos, manejo de errores
+    config.js               # carga el .env y expone puerto y modelos
+    middleware/
+      rate-limit.js         # limitador de peticiones en memoria
+    routes/
+      jobs.routes.js        # vacantes + upload + analizar + ranking + chat
+      chat.routes.js        # chat "suelto" de la plantilla original (se conserva)
+    services/
+      ai.service.js         # orquestador: cadena de motores, failover, streaming
+      providers/
+        gemini.js           # motor Gemini (texto + PDF) y embeddings
+        openaiCompat.js     # motor compatible con OpenAI (Groq/OpenRouter)
+        index.js            # registro de motores según credenciales
+      cv.js                 # regla única de "CV analizado" (score + vector)
+      pdfText.js            # extrae el texto del PDF y reordena columnas
+      scoring.service.js    # scoring de CVs y armado del ranking/KPIs
+      retrieval.service.js  # embeddings + similitud coseno
+      chat.service.js       # RAG: recuperar + armar contexto + responder
+      store.service.js      # persistencia en JSON (escritura atómica)
+    prompts/                # system prompts y esquema JSON del scoring
+    data/                   # jobs.json + cvs/*.pdf  (runtime, gitignored)
+  test/                     # tests (node:test) + fixtures PDF
 
 frontend/
   index.html                # SPA con 3 vistas (Vacantes, Ranking, Chat)
@@ -154,7 +158,7 @@ frontend/
     app.js                  # estado, router de pestañas, tema y toast
   assets/                   # fuentes, iconos y marca (self-hosted)
 
-sample-cvs/                 # CVs de ejemplo para probar
+cvs-ejemplo/                # 34 CVs de ejemplo por rol para probar
 docs/                       # documentación del proyecto
 ```
 
@@ -164,12 +168,17 @@ docs/                       # documentación del proyecto
   sus CV: score, resumen, skills, vector y texto extraído).
 - Los PDFs subidos viven en `backend/src/data/cvs/<uuid>.pdf`.
 - `backend/src/data/` está **gitignoreado** (son datos de runtime).
-- La carpeta `sample-cvs/` trae PDFs de ejemplo para probar el flujo completo.
+- La carpeta `cvs-ejemplo/` trae 34 PDFs de ejemplo (agrupados por rol) para probar el flujo completo.
 
 ## Verificación rápida
 
 1. Crear una vacante. Con sólo el **título**, el botón **Autocompletar** (IA) redacta los
    requisitos y la descripción.
-2. Desplegarla, subir los PDFs de `sample-cvs/` y pulsar **Analizar CVs**.
+2. Desplegarla, subir los PDFs de `cvs-ejemplo/` y pulsar **Analizar CVs**.
 3. Ver el **Ranking** y abrir el PDF de un candidato con el ícono junto al nombre.
 4. En **Chat**, preguntar p. ej. *"¿Quién tiene más experiencia con React?"*.
+
+## Licencia
+
+MIT — ver [`LICENSE`](LICENSE). Las tipografías incluidas son OFL (ver
+`frontend/assets/fonts/licenses/`).

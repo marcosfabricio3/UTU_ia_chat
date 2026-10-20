@@ -1,5 +1,5 @@
 {
-  "name": "backend",
+  "name": "cvlight-backend",
   "version": "1.0.0",
   "main": "src/app.js",
   "scripts": {
@@ -8,9 +8,9 @@
     "test": "node --test \"test/**/*.test.cjs\""
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "author": "marcosfabricio3 <marcosfabricio633@gmail.com>",
+  "license": "MIT",
+  "description": "Backend de CVlight: análisis, ranking y chat RAG de CVs con IA (Express + Gemini/Groq).",
   "engines": {
     "node": ">=18"
   },
