@@ -120,20 +120,29 @@
 /* Hover discreto: subrayado papel/actual (sin chip, sin cambio de color
    que rompería contraste sobre la banda). */
 .foot-nav a:hover { text-decoration-color: currentColor; }
-.foot-meta {
+/* Redes sociales: íconos inline (Simple Icons) con relleno currentColor →
+   siguen el color del texto de la banda (papel en claro, negro en oscuro). */
+.foot-social {
   margin-left: auto;
   display: flex;
-  flex-direction: row;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--s3);
-  font-family: var(--font-mono);
-  font-size: var(--fs-micro-2);
-  line-height: 1.5;
-  text-transform: uppercase;
-  letter-spacing: var(--track-micro);
-  color: var(--paper);
+  align-items: center;
+  gap: var(--s2);
 }
+/* Hover: SOLO el ícono cambia de color (sin cajas ni fondos) al acento del
+   tema — var(--salmon) es el ROL de acento: salmón sobre la banda negra en
+   claro, y blanco sobre la banda salmón en oscuro. Mismo gesto que
+   .link-btn:hover (text-decoration-color: var(--salmon)).
+   NO se usa --salmon-solid (literal): en oscuro la banda ES salmón y el
+   ícono se le perdería. */
+.foot-social a {
+  color: var(--paper);
+  display: inline-flex;
+  padding: var(--s1);        /* agranda el área de clic/touch del ícono */
+  transition: color .15s ease;
+}
+.foot-social a:hover { color: var(--salmon); }
+.foot-social svg { display: block; }
 .foot-note {
   flex-basis: 100%;
   margin-top: 0;
@@ -149,7 +158,7 @@
 @media (max-width: 900px) {
   .foot { margin-left: 0; }
   .foot-inner { align-items: flex-start; }
-  .foot-meta { margin-left: 0; align-items: flex-start; }
+  .foot-social { margin-left: 0; }
 }
 
 /* ---------------- Marca ---------------- */
@@ -216,12 +225,29 @@
 /* Control de tema: <theme-switch> (web component v1.5.2, assets/vendor).
    Su botón vive en shadow DOM, así que desde acá sólo se pueden tocar color y
    tamaño (--theme-switch-icon-color / width), no las formas del ícono. */
+/* Registro la custom property como <color> para que el cambio de hover pueda
+   animarse (sin @property los custom properties no se interpolan). El
+   initial-value es el fallback que ya usa el componente (#000). */
+@property --theme-switch-icon-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #000000;
+}
 .theme-switch {
   --theme-switch-icon-color: var(--salmon-ink);
   margin-left: auto;
   flex: none;
   color: var(--salmon-ink);
+  transition: --theme-switch-icon-color 150ms ease;
 }
+/* Hover: el ícono cambia de color en LOS DOS temas (la property se hereda hasta
+   el shadow DOM, donde el svg la usa para fill/stroke).
+   · Claro: de tinta a papel → se "enciende" sobre la barra salmón.
+   · Oscuro: de tinta a salmón (--salmon-solid, salmón literal en ambos temas)
+     → acento visible sobre la barra blanca. var(--salmon) NO sirve: en oscuro
+     es el ROL de acento (= blanco) y quedaría blanco sobre blanco. */
+.theme-switch:hover { --theme-switch-icon-color: var(--paper); }
+html[data-theme="dark"] .theme-switch:hover { --theme-switch-icon-color: var(--salmon-solid); }
 /* Anillo de foco SÓLO con teclado. El botón real vive en el shadow DOM del
    componente, así que `:focus-visible` no se puede consultar desde acá; usamos
    la clase `kb` (modalidad de entrada, ver a11y.js) para no dibujar el anillo
