@@ -10,7 +10,48 @@ window.CV = window.CV || {};
   // Si la app se sirve desde el mismo :3000, usamos rutas relativas; si no
   // (file:// o un server estático en otro puerto), apuntamos al backend local.
   const sameOrigin = location.hostname === "localhost" && location.port === "3000";
-  const API_BASE = sameOrigin ? "/api" : "http://localhost:3000/api";
+  let API_BASE = sameOrigin ? "/api" : "http://localhost:3000/api";
+
+  // Si se sirve por http(s) usamos rutas relativas derivadas de la ubicación actual.
+  if (location.protocol === "http:" || location.protocol === "https:") {
+    if (location.pathname && location.pathname.includes("/app")) {
+      API_BASE = location.origin + "/api";
+    } else if (sameOrigin) {
+      API_BASE = "/api";
+    } else if (location.hostname === "localhost") {
+      API_BASE = location.origin + "/api";
+    }
+  }
+
+  let apiToken = null;
+  let tokenPromise = null;
+
+  async function ensureToken() {
+    if (apiToken) return apiToken;
+    if (tokenPromise) return tokenPromise;
+    tokenPromise = (async () => {
+      try {
+        const res = await fetch(API_BASE.replace(/\/api$/, "") + "/api/session", {
+          method: "GET",
+          credentials: "same-origin",
+        });
+        const data = await res.json().catch(() => null);
+        if (data && data.success && data.token) {
+          apiToken = String(data.token);
+          return apiToken;
+        }
+      } catch (e) {
+        /* sin token, seguimos (modo legacy) */
+      }
+      return null;
+    })();
+    try {
+      const t = await tokenPromise;
+      return t;
+    } finally {
+      tokenPromise = null;
+    }
+  }
 
   // Corta las esperas: si la IA no responde en este tiempo, avisamos en vez de
   // dejar la UI "cargando" para siempre. 0 desactiva el corte.
@@ -27,6 +68,17 @@ window.CV = window.CV || {};
     const timeoutMs = opts.timeoutMs === undefined ? DEFAULT_TIMEOUT_MS : opts.timeoutMs;
     const fetchOpts = { ...opts };
     delete fetchOpts.timeoutMs;
+
+    // Adjuntamos el token de sesión si lo tenemos (protección Fase B).
+    const token = await ensureToken();
+    if (token) {
+      fetchOpts.headers = fetchOpts.headers || {};
+      if (!(fetchOpts.headers instanceof Headers)) {
+        fetchOpts.headers = { ...fetchOpts.headers, "X-API-Key": token };
+      } else {
+        fetchOpts.headers.set("X-API-Key", token);
+      }
+    }
 
     let res;
     try {
@@ -77,25 +129,49 @@ window.CV = window.CV || {};
   // Failover: si el backend cambia de modelo en el medio, avisa con `notice`
   // (cambio silencioso, todavía sin texto) o `restart` (el texto parcial ya no
   // sirve: el cliente debe vaciar la burbuja). Después siguen más `delta`.
-  async function chatStream(id, message, history, handlers = {}) {
+  async function chatStream(id, message, history, handlers = {}, opts = {}) {
+    const external = (opts && opts.signal) || null;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), STREAM_TIMEOUT_MS);
+    const onExtAbort = () => controller.abort();
+    if (external) {
+      if (external.aborted) controller.abort();
+      else external.addEventListener("abort", onExtAbort, { once: true });
+    }
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, STREAM_TIMEOUT_MS);
     let res;
+
+    const headers = { "Content-Type": "application/json", Accept: "text/event-stream" };
+    const token = await ensureToken();
+    if (token) headers["X-API-Key"] = token;
 
     try {
       res = await fetch(API_BASE + "/jobs/" + encodeURIComponent(id) + "/chat/stream", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+        headers,
         body: JSON.stringify({ message, history }),
         signal: controller.signal,
       });
     } catch (error) {
+      if (external) external.removeEventListener("abort", onExtAbort);
       clearTimeout(timer);
-      if (error && error.name === "AbortError") throw new Error(TIMEOUT_MSG);
+      if (error && error.name === "AbortError") {
+        if (external && external.aborted && !timedOut) {
+          const e = new Error("abortado por el usuario");
+          e.name = "AbortError";
+          e.userAborted = true;
+          throw e;
+        }
+        throw new Error(TIMEOUT_MSG);
+      }
       throw new Error(OFFLINE_MSG);
     }
 
     if (!res.ok) {
+      if (external) external.removeEventListener("abort", onExtAbort);
       clearTimeout(timer);
       const data = await res.json().catch(() => null);
       const err = new Error((data && data.message) || "Error " + res.status + " del servidor.");
@@ -137,8 +213,17 @@ window.CV = window.CV || {};
           }
         }
       }
+    } catch (error) {
+      if (error && error.name === "AbortError" && external && external.aborted && !timedOut) {
+        const e = new Error("abortado por el usuario");
+        e.name = "AbortError";
+        e.userAborted = true;
+        throw e;
+      }
+      throw error;
     } finally {
       clearTimeout(timer);
+      if (external) external.removeEventListener("abort", onExtAbort);
     }
 
     return { fuentes };

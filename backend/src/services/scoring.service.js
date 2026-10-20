@@ -1,14 +1,22 @@
-const { generateResponse, embedTexts, friendlyAiError } = require("./ai.service");
-const { SYSTEM_INSTRUCTION, buildScoreSchema } = require("../prompts/scoring.prompt");
-const { extractPdf } = require("./pdfText");
-const { isAnalyzed } = require("./cv");
-const store = require("./store.service");
-const { modelChains, thinkingLevel, thinkingBudget, maxOutputTokens, pdfMode } = require("../config");
+function sanitizeName(name) {
+  // Evita saltos de línea/inyecciones a través del nombre original del archivo
+  return String(name || "")
+    .replace(/[\r\n\t]/g, " ")
+    .replace(/[\x00-\x1F\x7F]/g, " ")
+    .trim()
+    .slice(0, 80);
+}
 
 function buildVacancyText(job) {
   return `VACANTE: ${job.titulo}
 DESCRIPCIÓN: ${job.descripcion}
 REQUISITOS: ${job.requisitos || "no especificados"}`;
+}
+
+// Delimita el texto del CV para ayudar a la IA a distinguir datos de instrucciones.
+function delimitCvText(cvText) {
+  const safe = String(cvText || "");
+  return `### DATOS_CV_INICIO ###\n${safe}\n### DATOS_CV_FIN ###`;
 }
 
 // Pedido cuando el texto del CV lo extraemos localmente (motores de texto).
@@ -17,9 +25,8 @@ function buildTextMessage(job, cvText) {
 
 CV (texto extraído del PDF):
 """
-${cvText}
+${delimitCvText(cvText)}
 """
-
 Evaluá el CV contra esta vacante y devolvé el JSON pedido.`;
 }
 
@@ -28,6 +35,24 @@ function buildPdfMessage(job) {
   return `${buildVacancyText(job)}
 
 Evaluá el CV adjunto contra esta vacante y devolvé el JSON pedido.`;
+}
+
+// Validación post-parse: asegura tipos mínimos del JSON de la IA.
+function validateScoreData(data) {
+  if (!data || typeof data !== "object") throw new Error("Respuesta del modelo inválida (no es un objeto).");
+  if (typeof data.score !== "number" || Number.isNaN(data.score)) throw new Error("Respuesta del modelo inválida (score no numérico).");
+  data.score = Math.max(0, Math.min(100, Math.round(data.score)));
+  if (typeof data.resumen !== "string") data.resumen = "";
+  if (typeof data.recomendacion !== "string") data.recomendacion = "";
+  if (typeof data.anios_experiencia !== "number" || Number.isNaN(data.anios_experiencia)) data.anios_experiencia = 0;
+  const arr = (v) => (Array.isArray(v) ? v.map(String).filter(Boolean) : []);
+  data.fortalezas = arr(data.fortalezas);
+  data.gaps = arr(data.gaps);
+  data.skills_match = arr(data.skills_match);
+  if (typeof data.texto_extraido === "string") {
+    data.texto_extraido = data.texto_extraido.slice(0, 200000);
+  }
+  return data;
 }
 
 // Los motores a veces envuelven el JSON en cercos de markdown.
@@ -59,8 +84,9 @@ async function scoreCv(job, cv) {
     label: "scoring",
   });
 
-  const data = parseJsonResponse(text);
+  let data = parseJsonResponse(text);
   if (!usingPdf) data.texto_extraido = extracted.text;
+  data = validateScoreData(data);
   return data;
 }
 

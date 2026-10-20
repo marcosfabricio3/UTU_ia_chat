@@ -128,7 +128,8 @@ window.CV = window.CV || {};
       for (const name of uniq) {
         const escName = util.esc(name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         if (!escName) continue;
-        safe = safe.replace(new RegExp(escName, "gi"), (m) => '<mark class="hl">' + m + "</mark>");
+        const re = new RegExp("(" + escName + ")(?![^<]*>)", "gi");
+        safe = safe.replace(re, (m) => '<mark class="hl">' + m + "</mark>");
       }
       return safe;
     },

@@ -38,6 +38,8 @@ const SUGGEST_SCHEMA = {
     },
   },
   required: ["requisitos", "descripcion"],
+  // El motor solo puede devolver estos campos (mismo criterio que el schema de scoring).
+  additionalProperties: false,
 };
 
 module.exports = { SUGGEST_SYSTEM_INSTRUCTION, SUGGEST_SCHEMA };

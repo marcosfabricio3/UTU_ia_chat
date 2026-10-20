@@ -17,6 +17,30 @@ const router = express.Router();
 const UPLOAD_DIR = path.join(__dirname, "..", "data", "cvs");
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
+// El mimetype lo declara el cliente y se puede falsificar: acá validamos la
+// firma real del archivo ya en disco ("%PDF-" en los primeros bytes).
+function empiezaConPdf(p) {
+  try {
+    const fd = fs.openSync(p, "r");
+    const buf = Buffer.alloc(5);
+    fs.readSync(fd, buf, 0, 5, 0);
+    fs.closeSync(fd);
+    return buf.toString("latin1") === "%PDF-";
+  } catch {
+    return false;
+  }
+}
+
+// Ningún path llega a fs.unlink sin verificar que esté dentro de UPLOAD_DIR:
+// aunque un registro viniera alterado, no borra archivos fuera de la carpeta.
+function unlinkDeUploads(p) {
+  const abs = path.resolve(p);
+  const raiz = path.resolve(UPLOAD_DIR) + path.sep;
+  if (!abs.startsWith(raiz)) return false;
+  fs.unlinkSync(abs);
+  return true;
+}
+
 // Los CVs se escriben en disco mientras se reciben (no en memoria): subir 20 PDFs
 // no debe reservar ~200 MB de RAM. El nombre real es un UUID; el original queda en
 // `archivo`.
@@ -34,6 +58,10 @@ const upload = multer({
 
 // Limita el análisis y el chat para no quemar la cuota de la IA.
 const aiLimit = rateLimit({ max: 30 });
+
+// Las mutaciones (crear vacantes, subir CVs, borrar) protegen el disco y la
+// base: también llevan cupo, no solo las rutas de IA.
+const writeLimit = rateLimit({ max: 30 });
 
 // Carga la vacante de :id o responde 404. Va antes de multer para no escribir
 // archivos en disco si la vacante no existe.
@@ -89,8 +117,8 @@ function parseHistory(raw) {
 }
 
 // Crear vacante
-router.post("/", (req, res) => {
-  const { titulo, descripcion, requisitos } = req.body;
+router.post("/", writeLimit, (req, res) => {
+  const { titulo, descripcion, requisitos } = req.body || {};
 
   if (!titulo || !descripcion) {
     return res.status(400).json({
@@ -126,10 +154,12 @@ router.post("/suggest", aiLimit, async (req, res) => {
       label: "suggest",
     });
     const data = JSON.parse(text);
+    // Validación post-parse: nos aseguramos de que sean strings (la IA puede devolver
+    // tipos inesperados; evitamos romper el frontend).
     res.json({
       success: true,
-      requisitos: data.requisitos || "",
-      descripcion: data.descripcion || "",
+      requisitos: typeof data.requisitos === "string" ? data.requisitos.slice(0, 10000) : "",
+      descripcion: typeof data.descripcion === "string" ? data.descripcion.slice(0, 10000) : "",
     });
   } catch (error) {
     console.error("Error al autocompletar la vacante:", error.message);
@@ -157,7 +187,7 @@ router.get("/:id", (req, res) => {
 });
 
 // Eliminar una vacante (y los PDFs de sus CVs)
-router.delete("/:id", (req, res) => {
+router.delete("/:id", writeLimit, (req, res) => {
   // Primero el registro (fuente de verdad) y después los archivos: si la
   // limpieza del disco falla, la vacante igual queda eliminada (el PDF huérfano
   // es inofensivo, pero una vacante apuntando a archivos borrados no lo sería).
@@ -171,7 +201,9 @@ router.delete("/:id", (req, res) => {
   for (const cv of removed.cvs || []) {
     const filePath = cv.path || path.join(UPLOAD_DIR, `${cv.id}.pdf`);
     try {
-      fs.unlinkSync(filePath);
+      // Mismo containment que al servir el archivo: si el path del registro
+      // apuntara fuera de la carpeta de CVs, no se borra nada.
+      unlinkDeUploads(filePath);
     } catch (error) {
       if (error.code !== "ENOENT") warnings.push(cv.archivo);
     }
@@ -184,7 +216,7 @@ router.delete("/:id", (req, res) => {
 // Eliminar UN CV de una vacante: sale del ranking y del chat (el RAG arma la
 // recuperación desde job.cvs en cada request, no hay índice cacheado). Borra el
 // registro (fuente de verdad) y después el PDF, igual que al borrar la vacante.
-router.delete("/:id/cvs/:cvId", (req, res) => {
+router.delete("/:id/cvs/:cvId", writeLimit, (req, res) => {
   const removed = store.deleteCv(req.params.id, req.params.cvId);
 
   if (!removed) {
@@ -193,7 +225,7 @@ router.delete("/:id/cvs/:cvId", (req, res) => {
 
   const filePath = removed.path || path.join(UPLOAD_DIR, `${removed.id}.pdf`);
   try {
-    fs.unlinkSync(filePath);
+    unlinkDeUploads(filePath);
   } catch (error) {
     if (error.code !== "ENOENT") console.warn("No se pudo borrar el PDF", removed.archivo, error.message);
   }
@@ -229,10 +261,35 @@ router.get("/:id/cvs/:cvId/file", (req, res) => {
 });
 
 // Subir CVs (campo multipart "cvs", hasta 20 archivos)
-router.post("/:id/cvs", loadJob, upload.array("cvs", 20), (req, res) => {
+router.post("/:id/cvs", writeLimit, loadJob, upload.array("cvs", 20), (req, res) => {
+  const files = req.files || [];
+
+  if (!files.length) {
+    return res.status(400).json({ success: false, message: "No se recibió ningún archivo." });
+  }
+
+  // El mimetype lo declara el cliente y se puede falsificar: validamos la firma
+  // real del archivo en disco. Si algún archivo no es PDF, se descarta todo el
+  // lote (se borran los ya escritos) y no queda ningún registro.
+  const noPdf = files.filter((f) => !empiezaConPdf(f.path));
+  if (noPdf.length) {
+    for (const f of files) {
+      try {
+        fs.unlinkSync(f.path);
+      } catch (e) {
+        /* nada: el archivo ya no estaba */
+      }
+    }
+    const nombres = noPdf.map((f) => f.originalname).slice(0, 3).join(", ");
+    return res.status(400).json({
+      success: false,
+      message: `Solo se aceptan PDFs (archivo${noPdf.length > 1 ? "s" : ""}: ${nombres}${noPdf.length > 3 ? ", …" : ""}).`,
+    });
+  }
+
   const saved = [];
   try {
-    for (const file of req.files || []) {
+    for (const file of files) {
       // El nombre en disco ya lo puso multer (UUID.pdf); el id es ese UUID.
       const cv = {
         id: path.basename(file.filename, ".pdf"),
@@ -241,20 +298,37 @@ router.post("/:id/cvs", loadJob, upload.array("cvs", 20), (req, res) => {
         creado: new Date().toISOString(),
       };
 
-      store.addCv(req.job.id, cv);
+      // addCv devuelve null si la vacante desapareció entre el loadJob y acá
+      // (borrado concurrente): no seguimos guardando a media máquina.
+      if (!store.addCv(req.job.id, cv)) {
+        const e = new Error("La vacante ya no existe.");
+        e.status = 409;
+        throw e;
+      }
       saved.push(cv);
     }
   } catch (error) {
-    // Si algo falla a mitad de camino, borramos lo ya escrito para no dejar PDFs huérfanos.
+    // Si algo falla a mitad de camino, revertimos los registros ya guardados y
+    // borramos los PDFs escritos: registro y disco quedan consistentes.
     console.error("Error al guardar CVs:", error.message);
-    for (const file of req.files || []) {
+    for (const cv of saved) {
+      try {
+        store.deleteCv(req.job.id, cv.id);
+      } catch (e) {
+        /* nada */
+      }
+    }
+    for (const file of files) {
       try {
         fs.unlinkSync(file.path);
       } catch (e) {
         /* nada: el archivo ya no estaba */
       }
     }
-    return res.status(500).json({ success: false, message: "No se pudieron guardar los CVs." });
+    return res.status(error.status || 500).json({
+      success: false,
+      message: error.status === 409 ? error.message : "No se pudieron guardar los CVs.",
+    });
   }
 
   res.status(201).json({ success: true, count: saved.length, cvs: saved.map(publicCv) });
@@ -269,7 +343,8 @@ router.post("/:id/analyze", aiLimit, loadJob, async (req, res) => {
     return res.status(400).json({ success: false, message: "La vacante no tiene CVs." });
   }
 
-  const force = !!(req.body && (req.body.force === true || req.body.force === "true"));
+  const body = req.body || {};
+  const force = !!(body.force === true || body.force === "true");
 
   try {
     const { job: updated, failed, analyzedNow, skipped, pending } =
@@ -337,7 +412,7 @@ router.get("/:id/ranking", (req, res) => {
 
 // Chat RAG sobre los CVs de una vacante
 router.post("/:id/chat", aiLimit, loadJob, async (req, res) => {
-  const { message } = req.body;
+  const { message } = req.body || {};
 
   if (!message || !message.trim()) {
     return res.status(400).json({ success: false, message: "El mensaje no puede estar vacío." });
@@ -351,7 +426,7 @@ router.post("/:id/chat", aiLimit, loadJob, async (req, res) => {
     });
   }
 
-  const history = parseHistory(req.body.history);
+  const history = parseHistory(req.body && req.body.history);
 
   try {
     const result = await chatService.chat(req.params.id, message, history);
@@ -375,7 +450,7 @@ router.post("/:id/chat", aiLimit, loadJob, async (req, res) => {
 // La recuperación (embedding) se hace ANTES de abrir el stream: si falla, todavía
 // se puede responder un JSON con status HTTP normal.
 router.post("/:id/chat/stream", aiLimit, loadJob, async (req, res) => {
-  const { message } = req.body;
+  const { message } = req.body || {};
 
   if (!message || !message.trim()) {
     return res.status(400).json({ success: false, message: "El mensaje no puede estar vacío." });
@@ -389,7 +464,7 @@ router.post("/:id/chat/stream", aiLimit, loadJob, async (req, res) => {
     });
   }
 
-  const history = parseHistory(req.body.history);
+  const history = parseHistory(req.body && req.body.history);
 
   let prepared;
   try {
@@ -414,15 +489,25 @@ router.post("/:id/chat/stream", aiLimit, loadJob, async (req, res) => {
 
   const send = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 
+  // Si el cliente se desconecta (cierra la pestaña, cambia de vacante), cortamos
+  // el consumo del stream: seguir generando tokens no lo paga nadie.
+  let clienteFuera = false;
+  res.on("close", () => {
+    clienteFuera = true;
+  });
+
   send("sources", prepared.fuentes);
   try {
     for await (const evt of chatService.chatStream(prepared)) {
+      if (clienteFuera) break; // el break invoca el return del generador (libera recursos)
       if (evt.type === "delta") send("delta", evt.text);
       else if (evt.type === "notice") send("notice", { message: evt.message });
       else if (evt.type === "restart") send("restart", { message: evt.message, model: evt.model });
     }
+    if (clienteFuera) return; // no emitimos done a un cliente que ya no está
     send("done", { ok: true });
   } catch (error) {
+    if (clienteFuera) return;
     console.error("Error en chat (stream):", error.message);
     send("error", { message: friendlyAiError(error) || "No se pudo responder la pregunta." });
   } finally {

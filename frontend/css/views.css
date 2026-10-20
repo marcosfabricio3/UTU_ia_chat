@@ -759,8 +759,7 @@ html.kb .theme-switch:focus-within { outline: 2px solid var(--salmon-ink); outli
   max-width: 320px;
   box-shadow: var(--hard-sm);
 }
-.toolbar select option, .field select option { background: var(--card); color: var(--ink); }
-
+.toolbar select option, 
 /* ---- Chat: la barra del selector de vacante se pinta con SALMÓN (acento),
    igual que la cabecera del Ranking: la conversación "cuelga" de la vacante.
    En oscuro rota a BLANCO con la misma tinta negra. El chip de error conserva
@@ -786,30 +785,48 @@ html.kb .theme-switch:focus-within { outline: 2px solid var(--salmon-ink); outli
 .msg { display: flex; flex-direction: column; gap: 6px; max-width: 78%; }
 .msg.user { align-self: flex-end; align-items: flex-end; }
 .msg.bot { align-self: flex-start; }
-.msg .who { font-family: var(--font-mono); font-size: var(--fs-micro-2); color: var(--ink-2); text-transform: uppercase; letter-spacing: var(--track-micro); }
-.msg.bot .who { display: inline-flex; align-items: center; gap: 6px; }
+.chat-msg { display: flex; flex-direction: column; gap: 6px; max-width: 820px; }
+.chat-msg.user { align-self: flex-end; align-items: flex-end; }
+.chat-msg.bot { align-self: flex-start; }
+.msg .who,
+.chat-msg .who { font-family: var(--font-mono); font-size: var(--fs-micro-2); color: var(--ink-2); text-transform: uppercase; letter-spacing: var(--track-micro); }
+.msg.bot .who,
+.chat-msg.bot .who { display: inline-flex; align-items: center; gap: 6px; }
 /* Marca del asistente: cuadradito salmón. */
-.msg.bot .who::before {
+.msg.bot .who::before,
+.chat-msg.bot .who::before {
   content: ""; width: 9px; height: 9px;
   background: var(--salmon);
   border: var(--line-w-thin) solid var(--line);
 }
 .bubble { padding: var(--s3) var(--s4); border-radius: 0; white-space: pre-wrap; border: var(--line-w) solid var(--line); box-shadow: var(--hard-sm); }
-.msg.user .bubble { background: var(--salmon); color: var(--salmon-ink); }
-.msg.bot .bubble { background: var(--card); color: var(--ink); }
-.msg.bot.is-error .bubble { border-color: var(--danger); color: var(--danger); }
+.msg.user .bubble,
+.chat-msg.user .bubble { background: var(--salmon); color: var(--salmon-ink); }
+.msg.bot .bubble,
+.chat-msg.bot .bubble { background: var(--card); color: var(--ink); }
+.msg.bot.is-error .bubble,
+.chat-msg.bot.is-error .bubble { border-color: var(--danger); color: var(--danger); }
 
 /* Markdown mínimo del asistente (negrita, viñetas, numeradas, código).
    Se mantiene el bloque recto y plano: sin viñetas redondeadas ni degradados. */
-.msg.bot .bubble p { margin: 0 0 .6em; }
-.msg.bot .bubble > :last-child { margin-bottom: 0; }
+.msg.bot .bubble p,
+.chat-msg.bot .bubble p { margin: 0 0 .6em; }
+.msg.bot .bubble > :last-child,
+.chat-msg.bot .bubble > :last-child { margin-bottom: 0; }
 .msg.bot .bubble ul,
-.msg.bot .bubble ol { margin: 0 0 .6em; padding-left: 1.35em; }
-.msg.bot .bubble li { margin: 0 0 .25em; }
-.msg.bot .bubble li:last-child { margin-bottom: 0; }
-.msg.bot .bubble strong { font-weight: 800; }
-.msg.bot .bubble em { font-style: italic; }
-.msg.bot .bubble code {
+.chat-msg.bot .bubble ul,
+.msg.bot .bubble ol,
+.chat-msg.bot .bubble ol { margin: 0 0 .6em; padding-left: 1.35em; }
+.msg.bot .bubble li,
+.chat-msg.bot .bubble li { margin: 0 0 .25em; }
+.msg.bot .bubble li:last-child,
+.chat-msg.bot .bubble li:last-child { margin-bottom: 0; }
+.msg.bot .bubble strong,
+.chat-msg.bot .bubble strong { font-weight: 800; }
+.msg.bot .bubble em,
+.chat-msg.bot .bubble em { font-style: italic; }
+.msg.bot .bubble code,
+.chat-msg.bot .bubble code {
   font-family: var(--font-mono);
   font-size: .88em;
   background: var(--salmon-tint);
@@ -907,14 +924,26 @@ html.kb .theme-switch:focus-within { outline: 2px solid var(--salmon-ink); outli
 }
 
 /* Respuesta en streaming: cursor parpadeante al final del texto que se escribe. */
-.msg.bot.is-streaming .bubble::after {
+.msg.bot.is-streaming .bubble::after,
+.chat-msg.bot.is-streaming .bubble::after {
   content: "▍";
   margin-left: 2px;
   animation: blink 1s steps(1) infinite;
 }
 @keyframes blink { 50% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .msg.bot.is-streaming .bubble::after { animation: none; }
+  .msg.bot.is-streaming .bubble::after,
+  .chat-msg.bot.is-streaming .bubble::after { animation: none; }
+}
+
+.chat-msg .bubble strong { font-weight: 800; }
+.chat-msg .bubble em { font-style: italic; }
+.chat-msg .bubble code {
+  font-family: var(--font-mono);
+  font-size: .88em;
+  background: var(--salmon-tint);
+  border: var(--line-w-thin) solid var(--line);
+  padding: 0 4px;
 }
 
 /* Aviso de failover: "se cortó y reinicio con otro modelo". */
@@ -924,6 +953,12 @@ html.kb .theme-switch:focus-within { outline: 2px solid var(--salmon-ink); outli
   font-size: .8rem;
   font-family: var(--font-mono);
   margin-bottom: var(--s2);
+}
+
+/* El log del chat es scrollable con teclado (WCAG 2.1.1). */
+.chat-log:focus-visible {
+  outline: 2px solid var(--salmon-ink);
+  outline-offset: -4px;
 }
 
 .typing { display: inline-flex; gap: 6px; align-items: center; color: var(--ink-3); font-size: .85rem; font-family: var(--font-mono); }

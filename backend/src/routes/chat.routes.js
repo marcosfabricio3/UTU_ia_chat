@@ -11,7 +11,7 @@ const chatLimit = rateLimit({ max: 30 });
 // POST /api/jobs/:id/chat. Se conserva como referencia y para el diagnóstico de modelos.
 router.post("/", chatLimit, async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message } = req.body || {};
 
     if (!message || !message.trim()) {
       return res.status(400).json({
