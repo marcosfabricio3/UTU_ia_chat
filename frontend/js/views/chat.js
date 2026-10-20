@@ -17,6 +17,7 @@ CV.views = CV.views || {};
   let statusText = "Leyendo los CVs…"; // texto del indicador mientras se espera
   let messages = []; // { role: 'user'|'bot', text, sources?, error?, streaming? }
   let history = [];  // [{ role:'user'|'assistant', content }]
+  let chatAbort = null; // AbortController del stream en curso (se cancela al cambiar de vacante)
 
   const SUGGESTIONS = [
     "¿Quién tiene más experiencia con React?",
@@ -28,7 +29,8 @@ CV.views = CV.views || {};
   function mount(panel) { panelEl = panel; }
 
   function resolveJob() {
-    return CV.util.resolveJob(CV.app.state.jobs, jobId);
+    var fn = (CV.views.shared && CV.views.shared.resolveJob) ? CV.views.shared.resolveJob : CV.util.resolveJob;
+    return fn(CV.app.state.jobs, jobId);
   }
 
   function render() {
@@ -58,7 +60,7 @@ CV.views = CV.views || {};
         </div>
 
         <section class="block panel" aria-label="Conversación sobre los CVs">
-          <div class="chat-log" id="chat-log" role="log" aria-live="polite" aria-relevant="additions text"></div>
+          <div class="chat-log" id="chat-log" role="log" aria-live="polite" aria-relevant="additions text" tabindex="0" aria-label="Historial de conversación"></div>
 
           ${
             messages.length
@@ -77,6 +79,18 @@ CV.views = CV.views || {};
       </div>`;
 
     panelEl.querySelector("#chat-job").addEventListener("change", (e) => {
+      // Al cambiar de vacante cortamos el stream en curso: evita mensajes
+      // fantasma y que el contexto de A se mezcle con la vacante B.
+      if (chatAbort) {
+        try {
+          chatAbort.abort();
+        } catch (e) {
+          /* nada */
+        }
+        chatAbort = null;
+      }
+      loading = false;
+      streaming = false;
       jobId = e.target.value;
       CV.app.setActiveJob(jobId);
       messages = [];
@@ -116,7 +130,7 @@ CV.views = CV.views || {};
     log.innerHTML =
       messages.map(msgHtml).join("") +
       (loading
-        ? `<div class="msg bot"><span class="who">CVlight</span><span class="typing"><span class="spinner" aria-hidden="true"></span>${esc(statusText)}</span></div>`
+        ? `<div class="chat-msg bot"><span class="who">CVlight</span><span class="typing"><span class="spinner" aria-hidden="true"></span>${esc(statusText)}</span></div>`
         : "");
 
     // Mientras la respuesta se escribe, no anunciamos cada fragmento: el lector
@@ -133,7 +147,7 @@ CV.views = CV.views || {};
   function updateStreamBubble(bot) {
     const log = panelEl.querySelector("#chat-log");
     if (!log) return;
-    const node = log.querySelector(".msg.bot.is-streaming");
+    const node = log.querySelector(".chat-msg.bot.is-streaming");
     if (!node) {
       renderLog();
       return;
@@ -144,13 +158,13 @@ CV.views = CV.views || {};
 
   function msgHtml(m) {
     if (m.role === "user") {
-      return `<div class="msg user"><span class="who">Vos</span><div class="bubble">${esc(m.text)}</div></div>`;
+      return `<div class="chat-msg user"><span class="who">Vos</span><div class="bubble">${esc(m.text)}</div></div>`;
     }
     const names = (m.sources || []).map((s) => prettifyName(s.archivo));
     // Respuesta en curso: texto plano + cursor. Al terminar se re-renderiza con Markdown y fuentes.
     if (m.streaming) {
       const note = m.note ? `<span class="stream-note">${esc(m.note)}</span>` : "";
-      return `<div class="msg bot is-streaming"><span class="who">CVlight</span>${note}<div class="bubble">${esc(m.text)}</div></div>`;
+      return `<div class="chat-msg bot is-streaming"><span class="who">CVlight</span>${note}<div class="bubble">${esc(m.text)}</div></div>`;
     }
     // Los errores se muestran como texto plano; las respuestas, con Markdown mínimo.
     const body = m.error ? esc(m.text) : richText(m.text, names);
@@ -160,7 +174,7 @@ CV.views = CV.views || {};
           `<span class="src">${esc(s.archivo)} <span class="sim">${Math.round(s.similitud * 1000) / 1000}</span></span>`
       )
       .join("");
-    return `<div class="msg bot ${m.error ? "is-error" : ""}">
+    return `<div class="chat-msg bot ${m.error ? "is-error" : ""}">
       <span class="who">CVlight</span>
       <div class="bubble">${body}</div>
       ${sources ? `<div class="srcs">${sources}</div>` : ""}
@@ -224,6 +238,15 @@ CV.views = CV.views || {};
     const myJobId = jobId;
     let bot = null;
     let fuentes = [];
+    const controller = new AbortController();
+    if (chatAbort) {
+      try {
+        chatAbort.abort();
+      } catch (e) {
+        /* nada */
+      }
+    }
+    chatAbort = controller;
 
     try {
       const result = await api.chatStream(myJobId, text, history, {
@@ -256,15 +279,36 @@ CV.views = CV.views || {};
           bot.text += chunk;
           updateStreamBubble(bot);
         },
-      });
+      }, { signal: controller.signal });
       if (result && result.fuentes) fuentes = result.fuentes;
     } catch (error) {
+      // Cancelado porque el usuario cambió de vacante: no añadimos mensaje, no
+      // mezclamos el historial y dejamos el estado limpio.
+      if (error && (error.userAborted || error.name === "AbortError")) {
+        if (jobId !== myJobId) {
+          chatAbort = null;
+          return;
+        }
+        // Abortado por cambio de vacante (o cancel interno)
+        if (!bot) {
+          chatAbort = null;
+          return;
+        }
+        bot.streaming = false;
+        bot.note = null;
+        bot.sources = bot.sources || [];
+        chatAbort = null;
+        renderLog();
+        focusInput();
+        return;
+      }
       if (!bot) {
         loading = false;
         streaming = false;
         messages.push({ role: "bot", text: error.message || "No se pudo responder.", error: true });
         renderLog();
         focusInput();
+        chatAbort = null;
         return;
       }
       // Se cortó a mitad: dejamos lo que llegó y avisamos.
@@ -275,6 +319,11 @@ CV.views = CV.views || {};
       streaming = false;
     }
 
+    if (chatAbort === controller) chatAbort = null;
+    // Nunca escribimos la respuesta en otra vacante distinta a la que inició el pedido.
+    if (jobId !== myJobId) {
+      return;
+    }
     if (!bot) {
       bot = { role: "bot", text: "", sources: [] };
       messages.push(bot);
@@ -297,12 +346,23 @@ CV.views = CV.views || {};
   }
 
   function emptyPanel(title, extra) {
-    return CV.util.emptyBox(title, extra);
+    var fn = (CV.views.shared && CV.views.shared.emptyPanel) ? CV.views.shared.emptyPanel : CV.util.emptyBox;
+    return fn(title, extra);
   }
 
   CV.views.chat = {
     mount,
     onShow() {
+      if (chatAbort) {
+        try {
+          chatAbort.abort();
+        } catch (e) {
+          /* nada */
+        }
+        chatAbort = null;
+      }
+      loading = false;
+      streaming = false;
       const prev = jobId;
       jobId = resolveJob();
       if (jobId !== prev) {

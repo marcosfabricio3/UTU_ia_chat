@@ -56,6 +56,22 @@ function addCv(jobId, cv) {
   return cv;
 }
 
+// Campos que un análisis puede escribir sobre un CV. Todo lo demás que venga en
+// `data` se descarta: aunque la IA (o un bug futuro) mande campos extra, no se
+// pisa el id, la ruta en disco ni se crean campos nuevos en el registro.
+const CAMPOS_ANALISIS = new Set([
+  "score",
+  "resumen",
+  "fortalezas",
+  "gaps",
+  "skills_match",
+  "anios_experiencia",
+  "recomendacion",
+  "texto_extraido",
+  "vector",
+  "analizado",
+]);
+
 function updateCv(jobId, cvId, data) {
   const jobs = readJobs();
   const job = jobs.find((j) => j.id === jobId);
@@ -64,7 +80,9 @@ function updateCv(jobId, cvId, data) {
   const cv = job.cvs.find((c) => c.id === cvId);
   if (!cv) return null;
 
-  Object.assign(cv, data);
+  for (const [campo, valor] of Object.entries(data)) {
+    if (CAMPOS_ANALISIS.has(campo)) cv[campo] = valor;
+  }
   writeJobs(jobs);
   return cv;
 }

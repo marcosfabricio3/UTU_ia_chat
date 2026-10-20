@@ -18,7 +18,8 @@ CV.views = CV.views || {};
   function mount(panel) { panelEl = panel; }
 
   function resolveJob() {
-    return CV.util.resolveJob(CV.app.state.jobs, jobId);
+    var fn = (CV.views.shared && CV.views.shared.resolveJob) ? CV.views.shared.resolveJob : CV.util.resolveJob;
+    return fn(CV.app.state.jobs, jobId);
   }
 
   function render() {
@@ -229,7 +230,7 @@ CV.views = CV.views || {};
   }
 
   function emptyState(title, extra) {
-    return CV.util.emptyBox(title, extra);
+    return (CV.views.shared&&CV.views.shared.emptyPanel)?CV.views.shared.emptyPanel(title,extra):CV.util.emptyBox(title,extra);
   }
 
   CV.views.ranking = {

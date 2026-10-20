@@ -91,12 +91,20 @@ CV.views = CV.views || {};
   function render() {
     if (!panelEl) return;
     const jobs = CV.app.state.jobs || [];
+    if (CV.app.state.jobsError && !jobs.length) {
+      const empty = panelEl.querySelector("#jobs-empty");
+      if (empty) {
+        empty.hidden = false;
+        empty.innerHTML = `<span class="empty-title">No se pudieron cargar las vacantes</span>${esc(CV.app.state.jobsError)}`;
+      }
+    }
 
     panelEl.querySelector("#jobs-count").textContent = jobs.length ? plural(jobs.length) : "";
-    panelEl.querySelector("#jobs-empty").hidden = jobs.length > 0;
+    const emptyEl = panelEl.querySelector("#jobs-empty");
+    if (emptyEl) emptyEl.hidden = jobs.length > 0;
 
     const list = panelEl.querySelector("#job-list");
-    list.innerHTML = jobs.map(jobCard).join("");
+    if (list) list.innerHTML = jobs.map(jobCard).join("");
 
     // Preserva la vacante seleccionada como "activa" (para Ranking/Chat).
     if (expandedId && !jobs.some((j) => j.id === expandedId)) expandedId = null;
@@ -195,8 +203,10 @@ CV.views = CV.views || {};
   }
 
   /* ---------------- Eventos ---------------- */
+  let creating = false;
   async function onSubmit(e) {
     e.preventDefault();
+    if (creating) return; // doble submit: evito enviar dos vacantes iguales
     const tituloEl = formEl.querySelector("#f-titulo");
     const descEl = formEl.querySelector("#f-desc");
     const titulo = tituloEl.value.trim();
@@ -208,6 +218,7 @@ CV.views = CV.views || {};
     ok = setFieldError(descEl, "#e-desc", descripcion ? "" : "Indicá una descripción.") && ok;
     if (!ok) return;
 
+    creating = true;
     const st = formEl.querySelector("#st-form");
     setStatus(st, "loading", "Creando vacante…");
     try {
@@ -221,6 +232,8 @@ CV.views = CV.views || {};
       CV.app.toast("Vacante creada: " + titulo);
     } catch (err) {
       setStatus(st, "error", err.message);
+    } finally {
+      creating = false;
     }
   }
 
@@ -330,14 +343,21 @@ CV.views = CV.views || {};
     if (!input) return;
     const id = input.dataset.file;
     const card = input.closest(".job-detail");
-    const uploadBtn = card.querySelector('[data-action="upload"]');
+    const uploadBtn = card && card.querySelector('[data-action="upload"]');
 
     const all = Array.from(input.files || []);
     const pdfs = pdfOnly(all);
     const rejected = all.length - pdfs.length;
 
-    uploadBtn.disabled = pdfs.length === 0;
-    if (!all.length) return;
+    if (uploadBtn) uploadBtn.disabled = pdfs.length === 0;
+    if (!all.length) {
+      if (status[id]) delete status[id];
+      if (card) {
+        const st = card.querySelector(".status");
+        if (st) st.remove();
+      }
+      return;
+    }
 
     if (!pdfs.length) {
       status[id] = { type: "error", text: "Solo se aceptan archivos PDF." };
@@ -351,7 +371,7 @@ CV.views = CV.views || {};
       }
       status[id] = { type: rejected ? "error" : "ok", text };
     }
-    renderInlineStatus(card, status[id]);
+    if (card) renderInlineStatus(card, status[id]);
   }
 
   /* ---------------- Acciones ---------------- */
@@ -379,7 +399,18 @@ CV.views = CV.views || {};
       CV.app.toast("CVs cargados.");
     } catch (err) {
       status[id] = { type: "error", text: err.message };
-      renderInlineStatus(card, status[id]);
+      // Si el DOM se re-renderizó entre el await y el catch (p. ej. recarga de
+      // listado), el nodo guardado puede estar desprendido: volvemos a renderizar
+      // el panel para que el error vuelva a mostrarse correctamente.
+      const card2 = panelEl && input.closest(".job-detail");
+      if (card2) {
+        renderInlineStatus(card2, status[id]);
+      } else {
+        render();
+        const card3 = panelEl && panelEl.querySelector('.job-detail #file-' + CSS.escape(id));
+        const card4 = card3 && card3.closest(".job-detail");
+        if (card4) renderInlineStatus(card4, status[id]);
+      }
       btn.disabled = false;
     }
   }
