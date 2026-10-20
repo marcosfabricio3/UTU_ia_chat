@@ -47,7 +47,7 @@ CV.views = CV.views || {};
       <form id="form-vacante" novalidate>
         <div class="field">
           <label for="f-titulo">Título <span class="req" aria-hidden="true">*</span></label>
-          <input id="f-titulo" name="titulo" autocomplete="off" required aria-describedby="e-titulo">
+          <input id="f-titulo" name="titulo" autocomplete="off" required aria-describedby="e-titulo" placeholder="Ej.: Desarrollador Frontend React">
           <p class="msg error" id="e-titulo" hidden></p>
         </div>
         <div class="field">
@@ -56,7 +56,7 @@ CV.views = CV.views || {};
         </div>
         <div class="field">
           <label for="f-desc">Descripción <span class="req" aria-hidden="true">*</span></label>
-          <textarea id="f-desc" name="descripcion" rows="5" required aria-describedby="e-desc"></textarea>
+          <textarea id="f-desc" name="descripcion" rows="5" required aria-describedby="e-desc" placeholder="Ej.: Buscamos una persona para sumarse al equipo de producto…"></textarea>
           <p class="msg error" id="e-desc" hidden></p>
         </div>
         <div class="btn-row">
