@@ -1,5 +1,5 @@
-/* =========================================================================
-   CVlight — api.js
+﻿/* =========================================================================
+   CVlight â€” api.js
    Capa fina sobre fetch hacia el backend (Express en :3000).
    Funciona servido por HTTP o abierto con file:// (CORS abierto en el backend).
    ========================================================================= */
@@ -8,19 +8,20 @@ window.CV = window.CV || {};
   "use strict";
 
   // Si la app se sirve desde el mismo :3000, usamos rutas relativas; si no
-  // (file:// o un server estático en otro puerto), apuntamos al backend local.
-  const sameOrigin = location.hostname === "localhost" && location.port === "3000";
-  let API_BASE = sameOrigin ? "/api" : "http://localhost:3000/api";
+  // (file:// o un server estÃ¡tico en otro puerto), apuntamos al backend local.
+    const RENDER_API = (window.CV_API_BASE) || "https://utu-ia-chat-api.onrender.com/api";
+  const isLocal = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+  const isVercel = /\\.vercel\\.app$/.test(location.hostname);
 
-  // Si se sirve por http(s) usamos rutas relativas derivadas de la ubicación actual.
-  if (location.protocol === "http:" || location.protocol === "https:") {
-    if (location.pathname && location.pathname.includes("/app")) {
-      API_BASE = location.origin + "/api";
-    } else if (sameOrigin) {
-      API_BASE = "/api";
-    } else if (location.hostname === "localhost") {
-      API_BASE = location.origin + "/api";
-    }
+  let API_BASE = "/api";
+  if (isLocal) {
+    if (location.port === "3000" || location.pathname.includes("/app")) API_BASE = "/api";
+    else API_BASE = location.origin + "/api";
+  } else if (isVercel) {
+    API_BASE = RENDER_API;
+  } else if (location.protocol === "http:" || location.protocol === "https:") {
+    if (location.pathname.includes("/app")) API_BASE = location.origin + "/api";
+    else API_BASE = "/api";
   }
 
   let apiToken = null;
@@ -31,9 +32,9 @@ window.CV = window.CV || {};
     if (tokenPromise) return tokenPromise;
     tokenPromise = (async () => {
       try {
-        const res = await fetch(API_BASE.replace(/\/api$/, "") + "/api/session", {
+        const base = API_BASE.replace(/\/api$/, ""); const res = await fetch(base + "/api/session", {
           method: "GET",
-          credentials: "same-origin",
+          credentials: isLocal ? "same-origin" : "omit",
         });
         const data = await res.json().catch(() => null);
         if (data && data.success && data.token) {
@@ -60,8 +61,8 @@ window.CV = window.CV || {};
   // 120s, pero un intento en curso puede estirarse; damos margen de sobra.
   const STREAM_TIMEOUT_MS = 180000;
   const OFFLINE_MSG =
-    "No se pudo conectar con el servidor. ¿Está corriendo el backend en http://localhost:3000?";
-  const TIMEOUT_MSG = "La IA tardó demasiado en responder. Probá de nuevo.";
+    "No se pudo conectar con el servidor. Â¿EstÃ¡ corriendo el backend en http://localhost:3000?";
+  const TIMEOUT_MSG = "La IA tardÃ³ demasiado en responder. ProbÃ¡ de nuevo.";
 
   async function request(path, options) {
     const opts = options || {};
@@ -69,7 +70,7 @@ window.CV = window.CV || {};
     const fetchOpts = { ...opts };
     delete fetchOpts.timeoutMs;
 
-    // Adjuntamos el token de sesión si lo tenemos (protección Fase B).
+    // Adjuntamos el token de sesiÃ³n si lo tenemos (protecciÃ³n Fase B).
     const token = await ensureToken();
     if (token) {
       fetchOpts.headers = fetchOpts.headers || {};
@@ -91,7 +92,7 @@ window.CV = window.CV || {};
       }
     } catch (error) {
       if (error && error.name === "AbortError") throw new Error(TIMEOUT_MSG);
-      throw new Error(OFFLINE_MSG);
+      throw new Error("No se pudo conectar con el servidor. Revisá la conexión.");
     }
 
     const data = await res.json().catch(() => null);
@@ -127,8 +128,8 @@ window.CV = window.CV || {};
   // EventSource, porque necesitamos POST con body).
   //
   // Failover: si el backend cambia de modelo en el medio, avisa con `notice`
-  // (cambio silencioso, todavía sin texto) o `restart` (el texto parcial ya no
-  // sirve: el cliente debe vaciar la burbuja). Después siguen más `delta`.
+  // (cambio silencioso, todavÃ­a sin texto) o `restart` (el texto parcial ya no
+  // sirve: el cliente debe vaciar la burbuja). DespuÃ©s siguen mÃ¡s `delta`.
   async function chatStream(id, message, history, handlers = {}, opts = {}) {
     const external = (opts && opts.signal) || null;
     const controller = new AbortController();
@@ -167,7 +168,7 @@ window.CV = window.CV || {};
         }
         throw new Error(TIMEOUT_MSG);
       }
-      throw new Error(OFFLINE_MSG);
+      throw new Error("No se pudo conectar con el servidor. Revisá la conexión.");
     }
 
     if (!res.ok) {
@@ -242,7 +243,7 @@ window.CV = window.CV || {};
       for (const f of files) fd.append("cvs", f);
       return request("/jobs/" + encodeURIComponent(id) + "/cvs", { method: "POST", body: fd });
     },
-    // El análisis manda los PDFs a la IA y puede tardar bastante.
+    // El anÃ¡lisis manda los PDFs a la IA y puede tardar bastante.
     analyze: (id, force) =>
       request("/jobs/" + encodeURIComponent(id) + "/analyze", {
         method: "POST",
@@ -250,8 +251,8 @@ window.CV = window.CV || {};
         body: JSON.stringify({ force: !!force }),
         timeoutMs: 600000,
       }),
-    // "Autocompletar": la IA redacta requisitos/descripción a partir del título.
-    // Puede encadenar modelos si el primero está saturado, por eso damos margen.
+    // "Autocompletar": la IA redacta requisitos/descripciÃ³n a partir del tÃ­tulo.
+    // Puede encadenar modelos si el primero estÃ¡ saturado, por eso damos margen.
     suggestJob: (payload) =>
       request("/jobs/suggest", {
         method: "POST",
@@ -265,7 +266,7 @@ window.CV = window.CV || {};
         "/jobs/" + encodeURIComponent(jobId) + "/cvs/" + encodeURIComponent(cvId),
         { method: "DELETE" }
       ),
-    // URL del PDF de un CV, para abrirlo en una pestaña nueva (no es un fetch).
+    // URL del PDF de un CV, para abrirlo en una pestaÃ±a nueva (no es un fetch).
     cvFileUrl: (jobId, cvId) =>
       API_BASE +
       "/jobs/" + encodeURIComponent(jobId) +
@@ -281,3 +282,4 @@ window.CV = window.CV || {};
     chatStream,
   };
 })(window.CV);
+
