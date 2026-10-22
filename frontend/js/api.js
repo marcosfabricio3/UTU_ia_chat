@@ -11,7 +11,9 @@ window.CV = window.CV || {};
   // (file:// o un server estÃ¡tico en otro puerto), apuntamos al backend local.
     const RENDER_API = (window.CV_API_BASE) || (window.API_BASE) || "https://utu-ia-chat-api.onrender.com/api";
   const isLocal = location.hostname === "localhost" || location.hostname === "127.0.0.1";
-  const isVercel = /\\.vercel\\.app$/.test(location.hostname);
+  const isVercel = window.CV_API_BASE
+    ? true
+    : location.hostname.indexOf(".vercel.app") !== -1;
 
   let API_BASE = "/api";
   if (isVercel) {
