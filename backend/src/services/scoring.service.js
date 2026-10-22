@@ -1,3 +1,13 @@
+const { extractPdf } = require("./pdfText");
+const { generateResponse, embedTexts, friendlyAiError } = require("./ai.service");
+const { isAnalyzed } = require("./cv");
+const store = require("./store.service");
+const { pdfMode, modelChains, thinkingLevel, thinkingBudget, maxOutputTokens } = require("../config");
+const { SCORING_SYSTEM_INSTRUCTION, buildScoreSchema } = require("../prompts/scoring.prompt");
+
+const concurrency = Math.max(1, Number(process.env.AI_SCORING_CONCURRENCY) || 2);
+const SYSTEM_INSTRUCTION = SCORING_SYSTEM_INSTRUCTION;
+
 function sanitizeName(name) {
   // Evita saltos de línea/inyecciones a través del nombre original del archivo
   return String(name || "")
