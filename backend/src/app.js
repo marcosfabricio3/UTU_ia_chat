@@ -8,7 +8,6 @@ require("dotenv").config();
 const config = require("./config");
 
 // Rutas
-const chatRoutes = require("./routes/chat.routes");
 const jobsRoutes = require("./routes/jobs.routes");
 
 // Token de API opcional para proteger las mutaciones/calls de IA.
@@ -57,7 +56,6 @@ app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 // Rutas de la API (protegidas por token; /api/session queda fuera)
 app.use("/api", requireApiToken);
 app.use("/api/jobs", jobsRoutes);
-app.use("/api/chat", chatRoutes);
 
 // Frontend CVlight servido en /app (para la demo).
 // La API queda en /api, así que esto no interfiere.

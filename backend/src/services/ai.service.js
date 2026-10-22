@@ -307,14 +307,6 @@ async function embedTexts(texts) {
   }
 }
 
-async function listModels() {
-  const ai = await geminiProvider.getClient();
-  const response = await ai.models.list();
-  for await (const model of response) {
-    console.log(model.name);
-  }
-}
-
 // Traduce un error de la IA a un mensaje para el usuario.
 function friendlyAiError(error) {
   if (!error) return null;
@@ -337,6 +329,5 @@ module.exports = {
   generateResponse,
   generateResponseStream,
   embedTexts,
-  listModels,
   friendlyAiError,
 };

@@ -109,8 +109,6 @@ queda pendiente con un aviso claro (*"…necesita el motor con visión…"*).
 | `GET` | `/api/jobs/:id/ranking` | Ranking ordenado + KPIs |
 | `POST` | `/api/jobs/:id/chat` | Chat RAG sobre los CVs de la vacante |
 | `POST` | `/api/jobs/:id/chat/stream` | Igual que el anterior, en **streaming (SSE)**: `sources` → (`notice`) → `delta`* → (`restart` → `delta`*) → `done` |
-| `POST` | `/api/chat` | Chat suelto (plantilla original, sin RAG) |
-| `GET` | `/api/chat/models` | Diagnóstico: lista los modelos en consola |
 
 `POST /api/jobs/suggest`, `POST /api/jobs/:id/analyze`, `POST /api/jobs/:id/chat`
 y `POST /api/jobs/:id/chat/stream` están limitados a **30 peticiones por minuto por IP**
@@ -130,7 +128,6 @@ backend/
       rate-limit.js         # limitador de peticiones en memoria
     routes/
       jobs.routes.js        # vacantes + upload + analizar + ranking + chat
-      chat.routes.js        # chat "suelto" de la plantilla original (se conserva)
     services/
       ai.service.js         # orquestador: cadena de motores, failover, streaming
       providers/
@@ -157,9 +154,6 @@ frontend/
     views/                  # vacantes.js, ranking.js, chat.js
     app.js                  # estado, router de pestañas, tema y toast
   assets/                   # fuentes, iconos y marca (self-hosted)
-
-cvs-ejemplo/                # 34 CVs de ejemplo por rol para probar
-docs/                       # documentación del proyecto
 ```
 
 ## Datos y persistencia
@@ -168,13 +162,12 @@ docs/                       # documentación del proyecto
   sus CV: score, resumen, skills, vector y texto extraído).
 - Los PDFs subidos viven en `backend/src/data/cvs/<uuid>.pdf`.
 - `backend/src/data/` está **gitignoreado** (son datos de runtime).
-- La carpeta `cvs-ejemplo/` trae 34 PDFs de ejemplo (agrupados por rol) para probar el flujo completo.
 
 ## Verificación rápida
 
 1. Crear una vacante. Con sólo el **título**, el botón **Autocompletar** (IA) redacta los
    requisitos y la descripción.
-2. Desplegarla, subir los PDFs de `cvs-ejemplo/` y pulsar **Analizar CVs**.
+2. Desplegarla, subir tus CVs en PDF y pulsar **Analizar CVs**.
 3. Ver el **Ranking** y abrir el PDF de un candidato con el ícono junto al nombre.
 4. En **Chat**, preguntar p. ej. *"¿Quién tiene más experiencia con React?"*.
 
