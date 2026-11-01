@@ -9,7 +9,7 @@ window.CV = window.CV || {};
 
   // Si la app se sirve desde el mismo :3000, usamos rutas relativas; si no
   // (file:// o un server estÃ¡tico en otro puerto), apuntamos al backend local.
-    const RENDER_API = (window.CV_API_BASE) || (window.API_BASE) || "https://utu-ia-chat-api.onrender.com/api";
+    const RENDER_API = (window.CV_API_BASE) || (window.API_BASE) || "https://utu-ia-chat.onrender.com/api";
   const isLocal = location.hostname === "localhost" || location.hostname === "127.0.0.1";
   const isVercel = window.CV_API_BASE
     ? true
